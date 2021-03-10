@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Page Cache on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/page-cache/</link>
+    <description>Recent content in Page Cache on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 02 Jun 2018 09:11:07 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/page-cache/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Linux内核学习笔记（八）Page Cache与Page回写</title>
+      <link>https://www.huliujia.com/blog/6d9091df3638fb9f6cea7867d7dd2e8281435b8c/</link>
+      <pubDate>Sat, 02 Jun 2018 09:11:07 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/6d9091df3638fb9f6cea7867d7dd2e8281435b8c/</guid>
+      <description>综述 Page cache是通过将磁盘中的数据缓存到内存中，从而减少磁盘I/O操作，从而提高性能。此外，还要确保在page cache中的数据更改时能够被同步到磁盘上，后者被称为page回写（page writeback）。一个inode对应一个page cache对象，</description>
+    </item>
+    
+  </channel>
+</rss>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>决策树 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/</link>
+    <description>Recent content in 决策树 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Mon, 09 Mar 2020 23:03:40 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>学习笔记：信息熵与决策树</title>
+      <link>https://www.huliujia.com/blog/ebab9bd78f525f25a01ef64345f279977c78a75f/</link>
+      <pubDate>Mon, 09 Mar 2020 23:03:40 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/ebab9bd78f525f25a01ef64345f279977c78a75f/</guid>
+      <description>信息熵 什么是信息熵 信息熵用于度量”预测随机变量Y的取值“的难度。信息熵越大说明Y的取值的不确定性越大，即预测难度越大。本文用H(Y)表示预测Y值的信息熵。 下表为两只球队的虚拟的胜、负、平历史记录，显然预测恒大比赛结果的难度要远小于绿城。因为恒大90%都是胜</description>
+    </item>
+    
+  </channel>
+</rss>

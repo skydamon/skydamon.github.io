@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>爬虫 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/</link>
+    <description>Recent content in 爬虫 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Mon, 23 Sep 2019 23:38:19 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>使用lxml.etree解析中文网页时出现乱码问题的解决办法</title>
+      <link>https://www.huliujia.com/blog/7ed51f3056b97ed75a998eee93082bb957756ccd/</link>
+      <pubDate>Mon, 23 Sep 2019 23:38:19 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7ed51f3056b97ed75a998eee93082bb957756ccd/</guid>
+      <description>吐槽 不得不说网络这个东西害死人，一群只会复制粘贴的瓜皮儿。 没一点有用的答案，还要写的像模像样装x 这个问题折腾了一个晚上，晚上找了各种方案，都是相互抄，然而都不能解决问题，找的过程中看到一个博主发出了这样的感慨，真的深表赞同啊，鱼目混杂的内容太多了。 lxml.etree.tostring 乱码的</description>
+    </item>
+    
+  </channel>
+</rss>

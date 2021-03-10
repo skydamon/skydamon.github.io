@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>原子操作 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/</link>
+    <description>Recent content in 原子操作 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sun, 17 Jan 2021 09:02:25 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>内存乱序与C&#43;&#43;内存模型详解</title>
+      <link>https://www.huliujia.com/blog/f85f72a3b3e3018ffe9c9d3c15dda0f5db079859/</link>
+      <pubDate>Sun, 17 Jan 2021 09:02:25 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/f85f72a3b3e3018ffe9c9d3c15dda0f5db079859/</guid>
+      <description>内存乱序 内存乱序指的是内存操作出现乱序，CPU缓存、编译器优化、处理器指令优化等都会改变内存顺序，造成内存乱序。 学习内存顺序容易陷入了一个误区，因为内存顺序是和CPU架构、编译器息息相关的，想要去深入理解CPU缓存怎么导致内存乱序的，编译器优化和处理器指令</description>
+    </item>
+    
+    <item>
+      <title>聊一聊原子操作</title>
+      <link>https://www.huliujia.com/blog/df3c2e8a9ef77bd2ed0d83292778734eb395970c/</link>
+      <pubDate>Sat, 16 Jan 2021 20:23:27 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/df3c2e8a9ef77bd2ed0d83292778734eb395970c/</guid>
+      <description>先举个栗子 下面的C++代码编译执行后，v的输出是多少呢？每个线程都执行了10000次v++，总共2个线程，那么v的最终结果应该是20000，结果是这样吗？ #include &amp;lt;iostream&amp;gt; // std::cout #include &amp;lt;thread&amp;gt; // std::thread int v = 0; void plus() { for(int i=0; i&amp;lt;10000; i++) { ++v; } } int main() { std::thread t1(plus); std::thread t2(plus); t1.join(); t2.join(); std::cout &amp;lt;&amp;lt; &amp;quot;v: &amp;quot; &amp;lt;&amp;lt; v &amp;lt;&amp;lt; std::endl; } //编译执行指令：g</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（十一）内核同步方法（自旋锁，信号量，互斥锁，完成变量，顺序锁，禁止抢占）</title>
+      <link>https://www.huliujia.com/blog/148dbabde2804f33fc69c42699a84637082c5d78/</link>
+      <pubDate>Sat, 09 Jun 2018 11:23:37 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/148dbabde2804f33fc69c42699a84637082c5d78/</guid>
+      <description>原子操作 Linux内核提供了多种同步机制，这些机制本质上都是通过原子操作来实现的。原子操作可以保证指令以原子方式执行，不会被中途打断（中断也不会打断一个指令，处理器只有在当前指令完成后才会去处理中断）。内核提供了两套原子操作的接口，一套用于整数原子操作，一</description>
+    </item>
+    
+  </channel>
+</rss>

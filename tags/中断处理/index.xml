@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>中断处理 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/</link>
+    <description>Recent content in 中断处理 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Wed, 06 Jun 2018 11:23:25 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Linux内核学习笔记（十）中断处理的下半部（Bottom Halve）</title>
+      <link>https://www.huliujia.com/blog/1553798b9dd8620c2fb8839ea0fda9cb2490d83d/</link>
+      <pubDate>Wed, 06 Jun 2018 11:23:25 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/1553798b9dd8620c2fb8839ea0fda9cb2490d83d/</guid>
+      <description>为什么需要下半部 中断处理程序有如下局限性： 中断处理程序是异步中断，被其中断执行的代码（包括别的中断处理程序）可能正在执行非常重要的任务，为了避免被中断进程停止过长时间，中断处理程序的执行应该越快越好。 中断处理程序会禁用其服务的中断线（没有设置IRQF_DI</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（九）中断和中断处理程序</title>
+      <link>https://www.huliujia.com/blog/98ea487478d486083017bc1c0ff0727851cfe096/</link>
+      <pubDate>Mon, 04 Jun 2018 11:23:18 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/98ea487478d486083017bc1c0ff0727851cfe096/</guid>
+      <description>中断 为了对计算机的硬件（键盘，硬盘，鼠标，网卡等）进行管理，内核需要和这些硬件通信。一种方式是使用轮训（polling）的方式，这种方式周期性地查看所有硬件设备的状态并做相应处理，这会造成很多不必要的系统开销。Linux内核使用中断的方式来管理硬件设备，中</description>
+    </item>
+    
+  </channel>
+</rss>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>进程状态 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/</link>
+    <description>Recent content in 进程状态 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Fri, 06 Apr 2018 18:46:02 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Linux进程状态码总结</title>
+      <link>https://www.huliujia.com/blog/f70756be368904eb2e2c463671d67fd5d0dd0b72/</link>
+      <pubDate>Fri, 06 Apr 2018 18:46:02 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/f70756be368904eb2e2c463671d67fd5d0dd0b72/</guid>
+      <description>在Linux中执行ps aux命令时，STAT列表示的是进程的状态。最近研究了一下进程状态码，这里做一个简单的总结。 下面是是ps的manual中给出的信息，本文将分别介绍每个状态 PROCESS STATE CODES Here are the different values that the s, stat and state output specifiers (header &amp;quot;STAT&amp;quot; or &amp;quot;S&amp;quot;) will display to describe the state of a process: D uninterruptible sleep (usually IO) R running or runnable (on run</description>
+    </item>
+    
+  </channel>
+</rss>

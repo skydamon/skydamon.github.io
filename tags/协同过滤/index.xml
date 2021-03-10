@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>协同过滤 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/</link>
+    <description>Recent content in 协同过滤 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 14 Mar 2020 22:01:26 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>学习笔记：相似度度量与协同过滤</title>
+      <link>https://www.huliujia.com/blog/7255c95b81e55827c1b8e6cbf24f2f760c978e06/</link>
+      <pubDate>Sat, 14 Mar 2020 22:01:26 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7255c95b81e55827c1b8e6cbf24f2f760c978e06/</guid>
+      <description>相似度度量 相似度度量关注的是两个对象是否相似，相似程度是多少？比如两张图片、两篇文章、两句话、两个人的喜好的相抵程度等。 为了度量相似度，首先需要将比较对象转换成实数向量，这样计算机才能够理解。对象类型不同，转换方式也不同，最终目的都是将比较对象转换成实数向</description>
+    </item>
+    
+  </channel>
+</rss>

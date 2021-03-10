@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>inline on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/inline/</link>
+    <description>Recent content in inline on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 27 Aug 2020 10:05:52 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/inline/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>内联函数(inline Function)浅析</title>
+      <link>https://www.huliujia.com/blog/4e4824434d272ec7be2bcf85c04cb2e57be3690e/</link>
+      <pubDate>Thu, 27 Aug 2020 10:05:52 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/4e4824434d272ec7be2bcf85c04cb2e57be3690e/</guid>
+      <description>什么是内联函数 内联函数(inline function)是C和C++都支持的一种语言特性，简单来说，就是在编译阶段在调用内联函数的地方直接展开函数代码，避免函数调用的开销。 内联函数的优点 内联函数的主要作用是避免函数调用开销，那就必须要讨论一下函数调用有哪些开</description>
+    </item>
+    
+  </channel>
+</rss>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>大数据处理 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/</link>
+    <description>Recent content in 大数据处理 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 02 Aug 2018 22:57:45 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>书签 of 技术文章</title>
+      <link>https://www.huliujia.com/blog/b09f78d4212f3007cbba0af93e0c34b4cf3d3180/</link>
+      <pubDate>Thu, 02 Aug 2018 22:57:45 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/b09f78d4212f3007cbba0af93e0c34b4cf3d3180/</guid>
+      <description>HDFS Hadoop核心之HDFS 架构设计 Hbase HBase and MapR-DB: Designed for Distribution, Scale, and Speed An In-Depth Look at the HBase Architecture IBM：HBase 深入浅出 Yarn IBM: YARN 简介 Yarn 架构 Hadoop MapReduce Hadoop MapReduce 的map、reduce分别是什么意思 Spark Cloudera: Apache Spark Resource Management and YARN App Models Spark中foreachPartition和mapPartitions的区别 Git</description>
+    </item>
+    
+  </channel>
+</rss>

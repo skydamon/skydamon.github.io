@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>文件系统 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/</link>
+    <description>Recent content in 文件系统 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Fri, 20 Apr 2018 15:40:05 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Linux内核学习笔记（一）虚拟文件系统（VFS）</title>
+      <link>https://www.huliujia.com/blog/81d31574c9a0088e8ae0c304020b4b1c4f6b8fb9/</link>
+      <pubDate>Fri, 20 Apr 2018 15:40:05 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/81d31574c9a0088e8ae0c304020b4b1c4f6b8fb9/</guid>
+      <description>什么是VFS Vritual Filesystem 是给用户空间程序提供统一的文件和文件系统访问接口的内核子系统。借助VFS，即使文件系统的类型不同（比如NTFS和ext3），也可以实现文件系统之间交互（移动、复制文件等）， 从用户空间程序的角度来看，VFS提供了一个统一的抽象、接口。这使得用</description>
+    </item>
+    
+    <item>
+      <title>VFS中的数据结构（superblock、dentry、inode、file）</title>
+      <link>https://www.huliujia.com/blog/bff01fecc6e590d3ff7101c34f4b3c8889272751/</link>
+      <pubDate>Sat, 14 Apr 2018 12:46:53 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/bff01fecc6e590d3ff7101c34f4b3c8889272751/</guid>
+      <description>VFS简介 VFS的理念是使用统一的数据结构在内核中保存不同类型文件系统的信息（含操作）。 VFS是一个介于用户程序和文件系统实现之间的一个抽象层，VFS既给了不同类型的文件系统支持Linux系统的公共接口，也给用户程序提供了一个统一的调用接口。 VFS背后的核</description>
+    </item>
+    
+  </channel>
+</rss>

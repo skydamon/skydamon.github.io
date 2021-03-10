@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>C/C&#43;&#43; on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/categories/c/c&#43;&#43;/</link>
+    <description>Recent content in C/C&#43;&#43; on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 30 Jan 2021 11:20:23 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/categories/c/c++/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>C/C&#43;&#43;中的断言(assert与static_assert)</title>
+      <link>https://www.huliujia.com/blog/f453c2a517ce997074a145325aef93abf2d91a67/</link>
+      <pubDate>Sat, 30 Jan 2021 11:20:23 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/f453c2a517ce997074a145325aef93abf2d91a67/</guid>
+      <description>assert简介 assert被C/C++用来判断某些条件是否成立，比如判断指针类型的大小sizeof(void*)是否大于8,或者判断malloc返回的指针是否为null。 assert的函数申明如下： void assert( int expression ); 如果expression为0，即false，a</description>
+    </item>
+    
+    <item>
+      <title>内存乱序与C&#43;&#43;内存模型详解</title>
+      <link>https://www.huliujia.com/blog/f85f72a3b3e3018ffe9c9d3c15dda0f5db079859/</link>
+      <pubDate>Sun, 17 Jan 2021 09:02:25 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/f85f72a3b3e3018ffe9c9d3c15dda0f5db079859/</guid>
+      <description>内存乱序 内存乱序指的是内存操作出现乱序，CPU缓存、编译器优化、处理器指令优化等都会改变内存顺序，造成内存乱序。 学习内存顺序容易陷入了一个误区，因为内存顺序是和CPU架构、编译器息息相关的，想要去深入理解CPU缓存怎么导致内存乱序的，编译器优化和处理器指令</description>
+    </item>
+    
+    <item>
+      <title>聊一聊原子操作</title>
+      <link>https://www.huliujia.com/blog/df3c2e8a9ef77bd2ed0d83292778734eb395970c/</link>
+      <pubDate>Sat, 16 Jan 2021 20:23:27 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/df3c2e8a9ef77bd2ed0d83292778734eb395970c/</guid>
+      <description>先举个栗子 下面的C++代码编译执行后，v的输出是多少呢？每个线程都执行了10000次v++，总共2个线程，那么v的最终结果应该是20000，结果是这样吗？ #include &amp;lt;iostream&amp;gt; // std::cout #include &amp;lt;thread&amp;gt; // std::thread int v = 0; void plus() { for(int i=0; i&amp;lt;10000; i++) { ++v; } } int main() { std::thread t1(plus); std::thread t2(plus); t1.join(); t2.join(); std::cout &amp;lt;&amp;lt; &amp;quot;v: &amp;quot; &amp;lt;&amp;lt; v &amp;lt;&amp;lt; std::endl; } //编译执行指令：g</description>
+    </item>
+    
+    <item>
+      <title>内联函数(inline Function)浅析</title>
+      <link>https://www.huliujia.com/blog/4e4824434d272ec7be2bcf85c04cb2e57be3690e/</link>
+      <pubDate>Thu, 27 Aug 2020 10:05:52 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/4e4824434d272ec7be2bcf85c04cb2e57be3690e/</guid>
+      <description>什么是内联函数 内联函数(inline function)是C和C++都支持的一种语言特性，简单来说，就是在编译阶段在调用内联函数的地方直接展开函数代码，避免函数调用的开销。 内联函数的优点 内联函数的主要作用是避免函数调用开销，那就必须要讨论一下函数调用有哪些开</description>
+    </item>
+    
+    <item>
+      <title>《C和C&#43;&#43;程序员面试秘笈》中存在的错误</title>
+      <link>https://www.huliujia.com/blog/8a209e5005fd17ec570ced231e48fa4165fde3b7/</link>
+      <pubDate>Wed, 11 Apr 2018 19:27:41 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/8a209e5005fd17ec570ced231e48fa4165fde3b7/</guid>
+      <description>最近在复习C++面试的考点，所以购买了《C和C++程序员面试秘笈》这本书（人民邮电出版社2014.3 ISBN：978-7-115-34113-6）。 书整体上是非常不错的，知识点覆盖比较全面，很符合我的需求。美中不足的是书中的错误有点多。阅读的过程中自己做了</description>
+    </item>
+    
+  </channel>
+</rss>

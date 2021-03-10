@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>内存顺序 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/</link>
+    <description>Recent content in 内存顺序 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sun, 17 Jan 2021 09:02:25 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>内存乱序与C&#43;&#43;内存模型详解</title>
+      <link>https://www.huliujia.com/blog/f85f72a3b3e3018ffe9c9d3c15dda0f5db079859/</link>
+      <pubDate>Sun, 17 Jan 2021 09:02:25 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/f85f72a3b3e3018ffe9c9d3c15dda0f5db079859/</guid>
+      <description>内存乱序 内存乱序指的是内存操作出现乱序，CPU缓存、编译器优化、处理器指令优化等都会改变内存顺序，造成内存乱序。 学习内存顺序容易陷入了一个误区，因为内存顺序是和CPU架构、编译器息息相关的，想要去深入理解CPU缓存怎么导致内存乱序的，编译器优化和处理器指令</description>
+    </item>
+    
+  </channel>
+</rss>
