@@ -1,0 +1,713 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>[译] Linux定时任务工具crontab入门教程 | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="[译] Linux定时任务工具crontab入门教程 - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2020-03-07T12:43:37&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2020-03-07T12:43:37&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="[译] Linux定时任务工具crontab入门教程">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/69c52d7badd64f2cd86765a3a8fee88b5cfaa13b/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">[译] Linux定时任务工具crontab入门教程</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2020年3月7日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/linux">Linux</a></span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8">工具使用</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<p><strong>crontab</strong>是类Unix系统最好用的工具之一，用来设置定时任务，这些定时任务也被称为“Cron Jobs”。Cron通常被用于运行定时备份、监控磁盘使用情况、定期删除不需要的文件（比如日志文件）、运行系统维护任务等。本文主要介绍crontab的基础使用，基本能覆盖大部分使用场景。</p>
+
+<h2 id="crontab的基本用法">crontab的基本用法</h2>
+
+<pre><code>    分钟(0-59) 小时(0-24) 日(1-31) 月(1-12）星期（0-7） &lt;要执行的命令&gt;
+</code></pre>
+
+<p>其中星期从0到6，0表示周日，1~7对应星期一到星期日，也可以用0来表示星期日</p>
+
+<p><img src="/images/Crontab语法格式.png" alt="Crontab语法格式" /></p>
+
+<p>上图每个星号*分别对应具体的时间块（分钟、小时、日等）</p>
+
+<p>执行<code>crontab -l</code>可以列出当前用户的所有定时任务</p>
+
+<p>如果想要编辑当前用户的定时任务，执行<code>crontab -e</code>，如果是第一次编辑crontab定时任务，需要先选择想要使用的编辑器，如下所示，输入对应的编号，如输入3，选择vim编辑器。</p>
+
+<pre><code>no crontab for root - using an empty one
+
+Select an editor.  To change later, run 'select-editor'.
+  1. /bin/ed
+  2. /bin/nano        &lt;---- easiest
+  3. /usr/bin/vim.basic
+  4. /usr/bin/vim.tiny
+</code></pre>
+
+<p>选择一个适合你的编辑器，然后实际上就是使用选中的编辑器打开了一个crontab文件，在打开的文件中按照crontab的格式每添加一行语句就对应一个定时任务，当然我们也可以删除一行语句来删除一个定时任务。</p>
+
+<h2 id="crontab的使用方式举例">crontab的使用方式举例</h2>
+
+<h3 id="1-每分钟执行一次命令">1. 每分钟执行一次命令</h3>
+
+<pre><code>* * * * * &lt;要执行的命令&gt;
+</code></pre>
+
+<p>比如每分钟往文件~/hello.txt中写入一个“hello world”，就可以在crontab文件中写入下面的crontab语句：</p>
+
+<pre><code>* * * * * echo &quot;hello world&quot; &gt;&gt; ~/hello.txt
+</code></pre>
+
+<p>保存、退出编辑器。然后可以通过<code>crontab -l</code>看到我们刚刚添加的任务，等待几分钟就可以看到~/hello.txt文件里面多了几个&rdquo;hello world&rdquo;</p>
+
+<h3 id="2-每5分钟执行一次命令">2. 每5分钟执行一次命令</h3>
+
+<pre><code>*/5 * * * * &lt;要执行的命令&gt;
+</code></pre>
+
+<h3 id="3-每15分钟执行一次命令">3. 每15分钟执行一次命令</h3>
+
+<pre><code>*/15 * * * * &lt;要执行的命令&gt;
+</code></pre>
+
+<h3 id="4-每个小时的27分执行一次命令">4. 每个小时的27分执行一次命令</h3>
+
+<pre><code>27 * * * * &lt;要执行的命令&gt;
+</code></pre>
+
+<p>该定时任务每小时执行一次，每次在27分执行。</p>
+
+<h3 id="5-也可以指定多个具体的执行时间点-使用逗号分隔">5. 也可以指定多个具体的执行时间点，使用逗号分隔</h3>
+
+<pre><code>0,5,10 * * * * &lt;要执行的命令&gt;
+</code></pre>
+
+<p>将在每个小时的0分、5分、10分分别执行一次</p>
+
+<h3 id="6-每半小时-即每30分钟执行一次命令">6. 每半小时，即每30分钟执行一次命令</h3>
+
+<pre><code>*/30 * * * * &lt;要执行的命令&gt;
+</code></pre>
+
+<p>如果现在是10点整，那么该任务将分别在10:30 11:00 11:30 &hellip; 执行。</p>
+
+<p>需要注意的是具体的时间和设置定时任务的时间是无关的，比如我们在10:17设置了定时任务，那么这个定时任务执行的时间不是10:47、11:17、11:47等，而是10:30、11:00、11:30等.</p>
+
+<h3 id="7-每小时的整点即0分时执行一次命令">7. 每小时的整点即0分时执行一次命令</h3>
+
+<pre><code>0 * * * * &lt;要执行的命令&gt;
+</code></pre>
+
+<h3 id="8-每两小时执行一次命令">8. 每两小时执行一次命令</h3>
+
+<pre><code>0 */2 * * * &lt;要执行的命令&gt;
+</code></pre>
+
+<p>如果当前时间是10点，那么下次执行时间就是12点</p>
+
+<h3 id="9-每天执行一次命令">9. 每天执行一次命令</h3>
+
+<pre><code>0 0 * * * &lt;要执行的命令&gt;
+</code></pre>
+
+<p>该命令将会在每天的00:00分执行</p>
+
+<h3 id="10-每天凌晨03-00执行命令">10. 每天凌晨03:00执行命令</h3>
+
+<pre><code>0 3 * * * &lt;要执行的命令&gt;
+</code></pre>
+
+<h3 id="11-每个周日执行一次命令">11. 每个周日执行一次命令</h3>
+
+<pre><code>0 0 * * 7 &lt;要执行的命令&gt;
+</code></pre>
+
+<h3 id="12-每个工作日-周一到周五-执行一次命令">12. 每个工作日（周一到周五）执行一次命令</h3>
+
+<pre><code>0 0 * * 1-5 &lt;要执行的命令&gt;
+</code></pre>
+
+<h3 id="13-每个月执行一次命令">13. 每个月执行一次命令</h3>
+
+<pre><code>0 0 1 * * &lt;要执行的命令&gt;
+</code></pre>
+
+<p>该定时任务会在每个月的1号，0点0分执行</p>
+
+<h3 id="14-每个月10号的16-15执行一次命令">14. 每个月10号的16:15执行一次命令</h3>
+
+<pre><code>15 16 10 * * &lt;要执行的命令&gt;
+</code></pre>
+
+<h3 id="15-每个季度执行一次命令-即每三个月执行一次">15. 每个季度执行一次命令（即每三个月执行一次）</h3>
+
+<pre><code>0 0 1 */3 * &lt;要执行的命令&gt;
+</code></pre>
+
+<p>该定时任务会在每个季度的第一个月的1号0点0分执行</p>
+
+<h3 id="16-在某个月的每一天的特定时间执行一次命令">16. 在某个月的每一天的特定时间执行一次命令</h3>
+
+<pre><code>5 0 * 4 * &lt;要执行的命令&gt;
+</code></pre>
+
+<p>该定时任务会在每年4月份的每天的0点5分执行</p>
+
+<h3 id="17-每6个月执行一次命令">17. 每6个月执行一次命令</h3>
+
+<pre><code>0 0 1 */6 * &lt;要执行的命令&gt;
+</code></pre>
+
+<h3 id="18-每年执行一次命令">18. 每年执行一次命令</h3>
+
+<pre><code>0 0 1 1 * &lt;要执行的命令&gt;
+</code></pre>
+
+<p>该定时任务会在每年的1月1号0点0分执行</p>
+
+<h3 id="19-使用标签设置任务">19. 使用标签设置任务</h3>
+
+<p>除了上述方式，还可以通过标签的方式来设置定时任务，crontab支持的定时标签见下表</p>
+
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>@reboot</td>
+<td>在系统启动的时候执行一次</td>
+</tr>
+
+<tr>
+<td>@yearly</td>
+<td>每年执行一次</td>
+</tr>
+
+<tr>
+<td>@annually</td>
+<td>和@yearly相同</td>
+</tr>
+
+<tr>
+<td>@monthly</td>
+<td>每个月执行一次</td>
+</tr>
+
+<tr>
+<td>@weekly</td>
+<td>每周周星一次</td>
+</tr>
+
+<tr>
+<td>@daily</td>
+<td>每天执行一次</td>
+</tr>
+
+<tr>
+<td>@midnight</td>
+<td>和@daily相同</td>
+</tr>
+
+<tr>
+<td>@hourly</td>
+<td>没消失执行一次</td>
+</tr>
+</tbody>
+</table>
+
+<pre><code>@reboot &lt;要执行的命令&gt;
+</code></pre>
+
+<p>该定时任务在系统每次启动后执行</p>
+
+<h3 id="20-移除当前用户所有的定时任务">20. 移除当前用户所有的定时任务</h3>
+
+<pre><code>crontab -r
+</code></pre>
+
+<p><strong>使用<code>man crontab</code>可以查看crontab更多细节内容</strong></p>
+
+<h2 id="crontab语法自动生成器">CronTab语法自动生成器</h2>
+
+<p>另外，通过基于网页的crontab语法生成器可以快速地检查crontab语句是否符合预期或者根据我们期望的间隔时间快速生成想要的crontab语句，下面两个网站都是英文的，但是都是很简单的英文，很容易上手。</p>
+
+<p>在<a href="https://crontab.guru/">crontab.guru</a> 中输入crontab语句，网站将会告诉我们这段语句的含义，以及执行的具体时间，可以用来检验编写的crontab语句是否正确</p>
+
+<p>在<a href="https://crontab-generator.org/">crontab-generator.org</a>中可以设定我们想要的运行间隔，然后网页会自动生成对应的crontab语句。</p>
+
+<blockquote>
+<p>本文为翻译文章，原文请点击 <a href="https://www.ostechnix.com/a-beginners-guide-to-cron-jobs/">www.ostechnix.com/a-beginners-guide-to-cron-jobs</a></p>
+</blockquote>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/69c52d7badd64f2cd86765a3a8fee88b5cfaa13b/">https://www.huliujia.com/blog/69c52d7badd64f2cd86765a3a8fee88b5cfaa13b/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/70f98f7c0ea538497afde194f6af34ea4cee3738/">Pyhon&#43;lxml&#43;xpath快速实现网页爬虫（比BeautifulSoup好用）</a></li>
+        
+        <li><a href="/blog/7ed51f3056b97ed75a998eee93082bb957756ccd/">使用lxml.etree解析中文网页时出现乱码问题的解决办法</a></li>
+        
+        <li><a href="/blog/802a64152bbbe877c95c84ef2fdf3857a056b536/">版本控制：Git与Svn的命令对应关系</a></li>
+        
+        <li><a href="/blog/29265e5a1e69e0794a9f1acd59ae94489cf38bb4/">云服务器&#43;Github Pages双节点托管解决博客访问速度和百度收录问题</a></li>
+        
+        <li><a href="/blog/4ee3f047a0c262c0b9b3566700676c54cdf6a30d/">使用云服务器&#43;Nginx搭建静态Web服务器</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/crontab">crontab</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1">定时任务</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

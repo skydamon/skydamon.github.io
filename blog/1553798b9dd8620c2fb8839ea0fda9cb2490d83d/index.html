@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Linux内核学习笔记（十）中断处理的下半部（Bottom Halve） | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="Linux内核学习笔记（十）中断处理的下半部（Bottom Halve） - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2018-06-06T11:23:25&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2018-06-06T11:23:25&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="Linux内核学习笔记（十）中断处理的下半部（Bottom Halve）">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/1553798b9dd8620c2fb8839ea0fda9cb2490d83d/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">Linux内核学习笔记（十）中断处理的下半部（Bottom Halve）</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2018年6月6日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/linux">Linux</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h2 id="为什么需要下半部">为什么需要下半部</h2>
+
+<p>中断处理程序有如下局限性：</p>
+
+<ul>
+<li>中断处理程序是异步中断，被其中断执行的代码（包括别的中断处理程序）可能正在执行非常重要的任务，为了避免被中断进程停止过长时间，中断处理程序的执行应该越快越好。</li>
+<li>中断处理程序会禁用其服务的中断线（没有设置IRQF_DISABLE），这是最好的情况。最坏的情况下会禁用当前处理器上所有中断（设置了IRQF_DISABLED）。禁用中断期间，硬件设备无法和操作系统通信，所以中断处理程序的执行要越快越好。</li>
+<li>中断处理程序通常对时延非常敏感，因为它们要和硬件交互。</li>
+<li>中断处理程序运行在中断上下文中，所以不能阻塞，那么就不能执行可能导致阻塞的操作或者调用可能导致阻塞的函数，这限制了中断处理程序能做的事情。</li>
+</ul>
+
+<p>操作系统肯定是需要一个快速的、异步的、简单的机制用于立刻响应硬件的请求并执行任何对时延敏感的操作。中断处理程序很好的实现了这个功能，但是不那么重要的工作可以并且应该推迟到<strong>中断处于激活状态时</strong>处理。基于上述的考量，中断处理被分成了两个部分：上半部（top halve）和下半部（bottom halve）。上半部，即中断处理程序，负责立刻响应硬件中断并处理对时延敏感的任务。下半部则负责在中断程序运行<strong>不久后</strong>完成中断处理程序没有处理的任务。</p>
+
+<p><strong>“不久后”</strong> 指的意思并不是在某些特定的时间点去执行，而是说将任务推迟到未来任意一个系统不太繁忙并且中断处于激活状态的时间点执行。通常情况下，下半部都会在中断处理程序返回之后立刻执行。<strong>最关键的是：下半部执行时，所有中断都处于激活状态（没有被禁用）</strong></p>
+
+<h3 id="如何给上半部和下半部分配工作">如何给上半部和下半部分配工作</h3>
+
+<p>首先，决定权完全在设备驱动开发者的手里，没有统一的标准，总的来说，分配目标就是在保证功能和性能的同时最小化中断处理程序的执行时间。下面是一些可供参考的原则：</p>
+
+<ul>
+<li>如果任务是时延敏感的，在中断处理程序中执行</li>
+<li>如果任务和硬件相关，在中断处理程序中执行</li>
+<li>如果任务需要确保不会被另一个中断（特别是同一个中断）打断，在中断处理程序中执行</li>
+<li>其他所有的任务，考虑在下半部执行。</li>
+</ul>
+
+<h2 id="下半部-bottom-halve">下半部（Bottom Halve）</h2>
+
+<p>2.6版本的内核中存在三种下半部机制：软中断（softirq），tasklet，工作队列。其中tasklet是基于软中断来实现的，软中断很少被直接使用，tasklet用得更多一些。软中断比较适合对时延较为敏感和执行频率较高的场景（内核中只有网络子系统和块设备直接使用软中断）。软中断和tasklet都是运行在中断上下中（不能阻塞，中断处于激活状态）。工作队列则是基于内核线程来做的，运行在进程上下文中（能阻塞，中断处于激活状态）。</p>
+
+<h2 id="软中断-softirq">软中断（Softirq）</h2>
+
+<p>软中断是一种将函数推后执行的机制，首先在内核中静态地（编译期间）注册处理一个软中断类型及其处理程序，在中断处理程序中标记想要运行的软中断类型，然后内核会在中断处理程序返回后寻找一个合适的时机运行对应的软中断处理程序。</p>
+
+<h3 id="软中断的实现">软中断的实现</h3>
+
+<p>软中断是在编译期间静态分配的，不能动态的注册和注销软中断。软中断使用softirq_action结构体来表示，该结构只有一个成员，即处理函数（softirq handler）。定义如下：</p>
+
+<pre><code class="language-C">struct softirq_action {
+    void (*action)(struct softirq_action *);
+};
+</code></pre>
+
+<p>Linux使用一个softirq_action数组来保存所有注册的软中断，数组上每个元素表示一个软中断类型：</p>
+
+<pre><code>static struct softirq_action softirq_vec[NR_SOFTIRQS];
+</code></pre>
+
+<p>每个注册的软中断占据数组中的一项，软中断的数量是在编译期间静态决定，不能动态改变。最多可以注册32个软中断（原因可以看后面的实现，pending bitmask是32bit的），但是现在的内核中实际上只注册了10个软中断。</p>
+
+<p>软中断处理程序程序action()的函数原型如下：</p>
+
+<pre><code class="language-C">void softirq_handler(struct softirq_action *)
+</code></pre>
+
+<p>一个软中断不会抢占另一个软中断，唯一可能抢占软中断的只有中断处理程序（软中断不会被调度程序抢占）。不过，其他软中断（可以是相同类型的软中断）可以在其他处理器上同时执行。</p>
+
+<h4 id="软中断的执行">软中断的执行</h4>
+
+<p>一个已注册的软中断必须被标记后才能执行，这被叫做触发软中断（raising the softirq）。通常，中断处理程序会在返回之前触发它对应的软中断。然后软中断会在一个合适的时机运行。内核会在下面几个地方检查和执行已经触发的软中断：</p>
+
+<ul>
+<li>从硬件中断的代码返回时</li>
+<li>在ksoftirqd内核线程中（后面说）</li>
+<li>在那些显式地检查、执行已触发软中断的代码中，比如网络子系统。</li>
+</ul>
+
+<p>无论是在哪个地方执行，都会调用do_softirq(),这个函数会调用__do_softirq()来遍历当前已经被触发的所有软中断。下面是简化后的__do_softirq()代码：</p>
+
+<pre><code class="language-C">u32 pending;
+/*
+ * 获得当前触发的软中断bitmask
+ * 置1的位置表示在软中断数组中对应位置的软中断被触发
+ */
+pending = local_softirq_pending();
+if (pending) {
+    struct softirq_action *h;
+
+    /*重置pending的bitmask，因为bitmask已经在上面被提取出来了*/
+    set_softirq_pending(0);
+
+    //获得已注册软中断数组
+    h = softirq_vec;
+    //循环遍历pending中的每一bit，并调用相应的软中断处理函数
+    do {
+        if (pending &amp; 1) //bitmask为1，说明软中断被触发了，执行其处理函数
+            h-&gt;action(h); //执行软中断处理程序
+        h++; //右移，指向到下一个注册的软中断
+        pending &gt;&gt;= 1; //右移一位，最低位和h指向的软中断对应
+    } while (pending); //pending为0说明没有其他被触发的软中断了。
+}
+</code></pre>
+
+<h3 id="软中断的使用">软中断的使用</h3>
+
+<p>软中断是保留给系统中对时间最敏感和最重要的下半部使用的。现在的Linux内核中，只有网络子系统和块设备直接使用软中断。此外，内核定时器timer和tasklet都是建立软中断之上的。</p>
+
+<h4 id="step1-分配索引">Step1：分配索引</h4>
+
+<p>首先要分配索引，内核通过一个枚举类型静态地来声明软中断，在&lt;linux/interrupt.h&gt;中，定义如下：</p>
+
+<pre><code class="language-C">enum
+{
+    HI_SOFTIRQ=0,           /* High-priority tasklets */
+    TIMER_SOFTIRQ,          /* Timers */
+    NET_TX_SOFTIRQ,         /* Send network packets */
+    NET_RX_SOFTIRQ,         /* Receive network packets */
+    BLOCK_SOFTIRQ,          /* Block devices */
+    BLOCK_IOPOLL_SOFTIRQ,   /* Block devices io poll*/
+    TASKLET_SOFTIRQ,        /* Normal priority tasklets */
+    SCHED_SOFTIRQ,          /* Scheduler */
+    HRTIMER_SOFTIRQ,        /* High-resolution timers */
+    RCU_SOFTIRQ,            /* RCU locking */
+    NR_SOFTIRQS             /* 这个值就是注册的软中断数组的大小，这里其实就是10 */
+};
+</code></pre>
+
+<p>想要增加自己的一个软中断类型，就需要修改这个枚举类型，插入一个新的枚举值。枚举值（软中断的索引）越小，优先级越高（在__do_softirq()中先被执行).</p>
+
+<h4 id="step2-注册软中断处理函数">Step2：注册软中断处理函数</h4>
+
+<p>给软中断分配了索引后，还需要注册该软中断类型的处理程序，通过open_softirq()动态注册，该函数需要两个参数，第一个是软中断的索引，第二个是它的处理程序。下面是网络子系统注册软中断的代码：</p>
+
+<pre><code class="language-C">open_softirq(NET_TX_SOFTIRQ, net_tx_action); /* 发包 */
+open_softirq(NET_RX_SOFTIRQ, net_rx_action); /* 收包 */
+</code></pre>
+
+<h4 id="step3-触发软中断">Step3：触发软中断</h4>
+
+<p>给一个软中断分配了索引并注册了处理程序之后，就可以运行了。为了让这个软中断运行，需要调用raise_softirq()触发这个软中断（实际上就是将pending bitmask对应的bit位置1），那么下一次do_softirq()执行时就会执行该软中断了。软中断最常被触发的地方是在中断处理程序中，中断处理程序完成一些和硬件相关的工作后，就触发这个软中断，并退出。内核会在中断处理程序完成后，在合适的时机调用do_softirq()执行中断处理程序留下的剩余任务。</p>
+
+<h4 id="使用软中断需要注意的问题">使用软中断需要注意的问题</h4>
+
+<p>软中断处理程序执行时，中断处于激活状态，但是软中断不能睡眠，软中断处理程序运行时会将将当前处理器上的软中断禁止。其他处理器仍可以执行别的软中断。如果同一个软中断在被执行的同时再次被触发了，那么另外一个处理器可以同时运行这个软中断的处理程序。这意味着任何共享的数据（甚至是仅在软中断处理程序内部使用的全局变量和静态变量）都需要锁机制。通过加锁阻止同一类型的软中断并行执行不是一个好方法，这样就失去了软中断的意义了，不如直接使用tasklet（见后面）。大部分软中断处理程序，都通过采用per-process数据来避免显式地加锁，而影响性能。</p>
+
+<p>软中断相对于tasklet最重要的优势是其可扩展性。如果不需要扩展到多个处理器，那么应该使用tasklet。tasklet本质上也是软中断，但是同一个处理程序不能在多个处理器上并发执行。</p>
+
+<h2 id="tasklet">Tasklet</h2>
+
+<p>Tasklet是建立在软中断之上的下半部机制，tasklet和软中断很类似，但是tasklet的接口更简单，也不需要严格的锁机制。因为tasklet是使用软中断来实现的，所以tasklet本身就是软中断。</p>
+
+<h3 id="tasklet的实现">Tasklet的实现</h3>
+
+<p>tasklet使用两种软中断来实现：HI_SOFTIRQ和TASKLET_SOFTIRQ。两者的唯一区别在于优先级，前者优先级更高，总是先于后者执行。</p>
+
+<h4 id="tasklet的结构">Tasklet的结构</h4>
+
+<p>tasklet使用tasklet_struct结构来表示，每个结构体表示一个唯一的tasklet，定义在&lt;linux/interrupt.h&gt;中：</p>
+
+<pre><code class="language-C">struct tasklet_struct {
+    struct tasklet_struct *next;    /* next tasklet in the list */
+    unsigned long state;            /* state of the tasklet */
+    atomic_t count;                 /* reference counter */
+    void (*func)(unsigned long);    /* tasklet handler function */
+    unsigned long data;             /* argument to the tasklet function */
+};
+</code></pre>
+
+<p>func()是tasklet的处理程序（等同于软中断的action()），data是func()的唯一参数。state总共有三种可能的取值，为TASKLET_STATE_SCHED时表示该tasklet已经被调度（等同于软中断被触发），准备执行，为TASKLET_STATE_RUN时表示该tasklet正在执行，为0说明这个tasklet没有被调度也不在执行。</p>
+
+<h4 id="tasklet调度的实现">Tasklet调度的实现</h4>
+
+<p>已调度的tasklet（等同于被触发的软中断）被存储在两个per-process结构中：tasklet_vec（普通tasklet）和tasklet_hi_vec（高优先级tasklet)。这两个都是tasklet_struct结构体构成的链表。链表中每一个tasklet_struct结构体都代表着一个不同的tasklet。</p>
+
+<p>内核使用tasklet_schedule()函数和tasklet_hi_schedule()函数分别对tasklet进行调度，这两个函数均使用tasklet的tasklet_struct结构体作为唯一参数。这两个函数均会先检验tasklet是否已经被调度（即state域是否为TASKLET_STATE_SCHED），如果是，立刻返回。将传入的tasklet加入task_vec链表或者tasklet_hi_vec链表中，并触发HI_SOFTIRQ或者TASKLET_SOFTIRQ软中断。</p>
+
+<p>前面提到软中断被触发后，内核会在合适的时间调用对应的软中断处理程序，对于HI_SOFTIRQ和TASKLET_SOFTIRQ来说，这两个处理程序分别是tasklet_action()和tasklet_hi_action()。这两个函数会分别遍历各自tasklet链表上的tasklet并调用对应的tasklet处理程序。tasklet_action()和tasklet_hi_action()通过检查和维护tasklet_struct的state域来确保同一个类型的tasklet不会在多个处理器上并行执行（检查state如果发现state域为TASKLET_STATE_RUN，说明该tasklet正在别的处理器上运行，就直接跳过该tasklet。当要执行一个tasklet时，会先将state域置为TASKLET_STATE_RUN）</p>
+
+<h3 id="tasklet的使用">Tasklet的使用</h3>
+
+<h4 id="step1-声明一个新的tasklet">Step1：声明一个新的tasklet</h4>
+
+<p>通过宏DECLARE_TASKLET(name, func, data)可以静态地创建一个tasklet_struct结构，name是tasklet的名字，func是它的处理程序，data是要传给func()的参数。这个宏等价于：</p>
+
+<pre><code class="language-C">struct tasklet_struct my_tasklet = { NULL, 0, ATOMIC_INIT(0),
+                                     my_tasklet_handler, dev };
+</code></pre>
+
+<p>还可以通过调用tasklet_init()动态地给一个tasklet指定处理程序和名字（运行期间确定的，静态的是在编译器期间就确定了）：</p>
+
+<pre><code class="language-C">tasklet_init(t, tasklet_handler, dev); /* dynamically as opposed to statically */
+</code></pre>
+
+<h4 id="step2-编写该tasklet的处理程序">Step2：编写该tasklet的处理程序</h4>
+
+<p>tasklet的处理程序必须符合下面的函数规范：</p>
+
+<pre><code class="language-C">void tasklet_handler(unsigned long data)
+</code></pre>
+
+<p>和软中断类似，tasklet不能睡眠（阻塞），因为软中断是运行在中断上下文中的，而tasklet是使用软中断来实现的。</p>
+
+<h4 id="step3-对该tasklet进行调度">Step3：对该tasklet进行调度</h4>
+
+<p>使用tasklet_schedule()进行调度（类似软中断的触发），传入参数为指向tasklet_struct的指针。tasklet被调度后，内核会在合适的时机执行该taskelt。（详见前面的tasklet调度的实现）。如果一个tasklet在执行前被调度了多次，还是只会执行一次（tasklet链表中不会有重复的tasklet）。如果一个tasklet在运行中被调度了（比如被另一个处理器上执行的代码调度了），那么这个tasklet会被重新调度并在下次内核处理tasklet的时候再次执行。</p>
+
+<h3 id="内核线程ksoftirqd">内核线程ksoftirqd</h3>
+
+<p>当系统被软中断淹没的时候，即出现了大量软中断，内核使用per-process的内核线程（每个处理器一个线程）来帮助处理软中断。</p>
+
+<p>前面提到，内核会在几个地方处理软中断，而在中断处理程序返回时是最常见的处理软中断的地方。软中断可能被高频触发（比如在网络负载非常高的时候），另外，软中断处理函数有时候还会自行重复触发，即软中断执行时自己触发自己从而让自己再次执行（比如网络子系统）。这两种因素综合在一起就可能导致用户进程无法获得足够的处理器时间（饥饿）。一种解决方案是优先保证软中断的执行，即每次__do_softirq()处理软中断时，在返回前都先检查是否有新的软中断被触发，如果有，立刻继续处理新触发的软中断，不断重复此过程，直到没有新的软中断被触发，这样的结果就是在高负载时发生用户进程饥饿。另一个解决方案是每次执行__do_softirq()时不管新触发的软中断，这样的后果是新触发的软中断只有等到下次内核处理软中断的时候才能被执行，而可能性最大的情况就是等到下次中断（硬件中断），这意味可能要等一段时间。而在一个空闲的系统中，显然立刻处理新触发的软中断才是一个更好的做法。</p>
+
+<p>上面的解决方案都有各自的缺点，Linux的采用的解决方案是这样的：</p>
+
+<p>__do_softirq()在返回前会查看是否有新的软中断被触发了，如果有，就重新遍历软中断数组，并执行新触发的软中断，__do_softirq()维持了一个计数器，每次重新遍历软中断数组，计数器就会减1，如果计数器变为0，那么就唤醒内核线程ksoftirqd来负责处理软中断，__do_softirq()直接返回。ksoftirqd使用最低的优先级（nice值是19），这样就不会抢占其他重要的任务了。这种方案在有大量软中断时，既能保证用户程序不会因为大量的软中断而出现饥饿，也可以确保过量的软中断最终都能够被处理。在系统空闲时，软中断能够被迅速处理，因为系统空闲，所以内核线程softirqd会马上被调度。</p>
+
+<p>每个处理器都有一个对应的ksoftirqd，命名方式是ksoftirqd/n，其中n是处理器的编号。比如在一个双处理器的机器上，就会有两个ksoftirqd，分别为ksoftirqd/0和ksoftirqd/1。ksoftirqd被初始化后就会执行类似下面的死循环：</p>
+
+<pre><code class="language-C">for (;;) {
+    if (!softirq_pending(cpu))
+        schedule();
+
+    set_current_state(TASK_RUNNING);
+
+    while (softirq_pending(cpu)) {
+        do_softirq();
+        if (need_resched())
+            schedule();
+    }
+
+    set_current_state(TASK_INTERRUPTIBLE);
+}
+</code></pre>
+
+<p>ksoftirqd如果发现有被触发的软中断，就会调用do_softirq()来处理软中断，每次执行完do_softirq()，ksoftirqd都会检查是否需要调度，如果需要，就调用schedule()来进行调度，让其他更重要的任务先执行。如果发现有新的软中断被触发，就会再次执行do_sofirq()。重复上述过程直到系统中没有被触发的软中断后，ksoftirqd将自己标记为TASK_INTERRUPTIBLE，进入睡眠状态，等待下次do_softirq()发现有过量的软中断（通过计时器值判断）时将其唤醒。</p>
+
+<h2 id="工作队列-work-queue">工作队列（Work Queue）</h2>
+
+<p>工作队列是和软中断或者tasklet迥异的一种下半部机制。工作队列将工作推迟，交给内核线程执行（所以工作队列总是运行在进程上下文中）。工作队列的这种实现可以很好的利用进程上下文的优势，最重要的就是可以睡眠也可以被调度（抢占）。与之相反的是，软中断和tasklet是不能睡眠和被调度的。</p>
+
+<h3 id="工作队列的实现">工作队列的实现</h3>
+
+<p>内核中可以定义多种工作队列，每种类型的工作队列在每一个处理器上都有一个工作队列。内核使用workqueue_struct存储一个类型的工作队列在所有处理器上的工作队列，定义如下：</p>
+
+<pre><code class="language-C">struct workqueue_struct {
+    struct cpu_workqueue_struct cpu_wq[NR_CPUS];
+    struct list_head list;
+    const char *name;
+    int singlethread;
+    int freezeable;
+    int rt;
+};
+</code></pre>
+
+<p>workqueue_struct结构体中包含一个cpu_workqueue_struct的数组，数组中的每一项对应系统中的一个处理器。每个cpu_workqueue_struct结构体存储该工作队列类型在一个处理器上的工作队列。cpu_workqueue_struct定义如下：</p>
+
+<pre><code class="language-C">struct cpu_workqueue_struct {
+    spinlock_t lock; /* lock protecting this structure */
+    struct list_head worklist; /* list of work */
+    wait_queue_head_t more_work;
+    struct work_struct *current_struct;
+    struct workqueue_struct *wq; /* associated workqueue_struct */
+    task_t *thread; /* associated thread */
+};
+</code></pre>
+
+<p>其中worklist是一个链表，存储该队列上的所有工作（work)。工作队列上的工作使用work_struct结构体来表示，定义如下：</p>
+
+<pre><code class="language-C">struct work_struct {
+    atomic_long_t data;
+    struct list_head entry;
+    work_func_t func;
+};
+</code></pre>
+
+<p>每种工作队列的每个内核线程（每种类型的工作队列在每个处理器上都有一个内核线程）都会执行worker_thread()函数，这个函数是一个死循环，函数进入死循环后就立刻睡眠，当有工作被放到队列中时，内核线程就会被唤醒，然后处理对应的队列上的所有工作（执行每个工作的处理函数），处理完毕后，进入睡眠，等待下次被唤醒。</p>
+
+<p>可以自己创建工作队列，但是大部分驱动都会使用系统提供的缺省的工作队列类型events，该类型的工作队列的内核线程名字为 events/n，n为处理器编号，每个处理器对应一个内核线程。如果下半部的工作是处理器密集型并且对性能敏感的，可以考虑创建自己的内核线程。比如XFS文件系统就自己创建了两种内核线程。</p>
+
+<h3 id="工作队列的使用">工作队列的使用</h3>
+
+<h4 id="step1-创建工作-creaing-work">Step1：创建工作（Creaing Work）</h4>
+
+<p>可以使用宏DECLARE_WORK在编译时静态地构建，也可以通过指针在运行时动态创建：</p>
+
+<pre><code class="language-C">DECLARE_WORK(name, void (*func)(void *), void *data);  //静态
+INIT_WORK(struct work_struct *work, void (*func)(void *), void *data);  //动态
+</code></pre>
+
+<h3 id="step2-定义工作队列处理函数">Step2：定义工作队列处理函数</h3>
+
+<p>工作队列的处理原型是：</p>
+
+<pre><code class="language-C">void work_handler(void *data)
+</code></pre>
+
+<p>工作队列的内核线程会执行这个函数，所以这个函数也是运行在进程上下文中的。但是这个函数不能访问用户空间内存，因为内核线程没有关联的用户空间内存映射（逻辑空间到物理空间的映射）。内核只有在代表用户进程执行时（比如执行系统调用时）才能够访问用户内存，这个时候有关联的用户空间内存映射。</p>
+
+<h3 id="step3-对工作-work-进行调度">Step3：对工作（work）进行调度</h3>
+
+<p>内核提供了两个函数对使用缺省工作队列events的工作进行调度</p>
+
+<pre><code class="language-C">schedule_work(&amp;work);
+schedule_delayed_work(&amp;work, delay);
+</code></pre>
+
+<p>schedule_work()会立刻对工作（work）进行调度，一旦其所在的处理器上的events内核线程被唤醒，该工作就会被执行。schedule_delayed_work()会延后一定数量的（由dealy指定）的timer tick后再进行调度。</p>
+
+<h3 id="如何创建新类型的工作队列">如何创建新类型的工作队列</h3>
+
+<p>如果需要利用单独的内核线程的（不用events的内核线程）的性能优势，可以通过函数struct workqueue_struct *create_workqueue(const char *name)创建一个新的工作队列，参数是工作队列的名字。比如缺省的events工作队列的创建：</p>
+
+<pre><code class="language-C">struct workqueue_struct *keventd_wq;
+keventd_wq = create_workqueue(“events”);
+</code></pre>
+
+<p>这个函数会创建所有的内核线程（每个处理器一个），并且做些准备好让这些内核线程可以处理工作。创建了新的内核线程之后，就可以使用新的内核线程进行调度了。对自定义的内核线程的调度函数有两个，功能和schedule_work(),schedule_delayed_work()相同，只是参数都多了一个work_queue指针，用于指定使用的工作队列</p>
+
+<pre><code class="language-C">int queue_work(struct workqueue_struct *wq, struct work_struct *work)
+int queue_delayed_work(struct workqueue_struct *wq,
+                        struct work_struct *work,
+                        unsigned long delay)
+</code></pre>
+
+<h2 id="三种下半部机制的比较">三种下半部机制的比较</h2>
+
+<p>tasklet是建立的软中断上的，所以这两者很相似。工作队列和它们差别很大，是基于内核线程实现的。</p>
+
+<p>软中断提供了最少的串行化，这就需要软中断处理程序必须处理好共享数据的安全，因为多个相同类型的软中断可以在不同的处理器上并行执行。但是对时延比较敏感的和执行频率很高的任务来说，软中断是性能最好的选择。</p>
+
+<p>tasklet的接口更为简单，并且因为两个相同的tasklet不会同时执行，所以实现起来更方便，不需要考虑共享数据的问题。</p>
+
+<p>工作队列的最大优势是它是运行在进程上下文中的，可以睡眠，这样就可以执行很多可能导致阻塞的操作。工作队列不适合高频任务（比如网络子系统），因为会涉及到大量的上下文切换，造成大量的额外开销。</p>
+
+<p>下面是书上的一个比较：</p>
+
+<table>
+<thead>
+<tr>
+<th>下半部</th>
+<th>上下文</th>
+<th>内在的串行化（Inherent Serialization）</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>软中断</td>
+<td>中断上下文</td>
+<td>无</td>
+</tr>
+
+<tr>
+<td>tasklet</td>
+<td>中断上下文</td>
+<td>同类型tasklet不能并行执行</td>
+</tr>
+
+<tr>
+<td>工作队列</td>
+<td>进程上下文</td>
+<td>没无，和进程上下文一样被调度</td>
+</tr>
+</tbody>
+</table>
+
+<h2 id="参考资料">参考资料</h2>
+
+<p>《Linux Kernel Development 3rd Edition》
+《Understanding The Linux Kernel 3rd Edition》</p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/1553798b9dd8620c2fb8839ea0fda9cb2490d83d/">https://www.huliujia.com/blog/1553798b9dd8620c2fb8839ea0fda9cb2490d83d/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/98ea487478d486083017bc1c0ff0727851cfe096/">Linux内核学习笔记（九）中断和中断处理程序</a></li>
+        
+        <li><a href="/blog/6d9091df3638fb9f6cea7867d7dd2e8281435b8c/">Linux内核学习笔记（八）Page Cache与Page回写</a></li>
+        
+        <li><a href="/blog/4645655cea5d5b6ecb20280536cd86e547421eeb/">Linux内核学习笔记（七）系统调用</a></li>
+        
+        <li><a href="/blog/3fbf8bbcd3d7fe167ceefd76538053515946babd/">Linux内核学习笔记（六）进程调度</a></li>
+        
+        <li><a href="/blog/9c6895a796464a3bac7fba4b17f76e1ae03d2ab4/">Linux内核学习笔记（五）进程地址空间</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/linux">Linux</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86">中断处理</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD">软中断</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

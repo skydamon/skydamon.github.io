@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>WAL on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/wal/</link>
+    <description>Recent content in WAL on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 02 Oct 2021 08:36:10 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/wal/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>LevelDB源码解析(7) 预写日志(WAL)</title>
+      <link>https://www.huliujia.com/blog/e8d980b551/</link>
+      <pubDate>Sat, 02 Oct 2021 08:36:10 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/e8d980b551/</guid>
+      <description>背景 LevelDB每次写key-value不会直接写到文件中，而是先暂存在Memtable中，Memtable写满后再写到文件中。如果发生故障(比如宕机)，保存在Memtable中的key-value就会全部丢失。所以为了保证数据的原子性和持久性，每次写k</description>
+    </item>
+    
+  </channel>
+</rss>

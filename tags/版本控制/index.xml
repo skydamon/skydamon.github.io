@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>版本控制 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/</link>
+    <description>Recent content in 版本控制 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Tue, 20 Aug 2019 23:19:09 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>版本控制：Git与Svn的命令对应关系</title>
+      <link>https://www.huliujia.com/blog/802a64152bbbe877c95c84ef2fdf3857a056b536/</link>
+      <pubDate>Tue, 20 Aug 2019 23:19:09 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/802a64152bbbe877c95c84ef2fdf3857a056b536/</guid>
+      <description>导言 作为一个只用过git的童鞋，因为工作需要遇见了svn。初次见面时还很羞涩，经过了一段时间的交往，我们之间的关系突飞猛进，也成功地收到了svn的“好人卡”（这是个悲伤的故事）。所以为了让和我一样的svn新童鞋能够快速收获好人卡，整理了一下git和svn各</description>
+    </item>
+    
+  </channel>
+</rss>

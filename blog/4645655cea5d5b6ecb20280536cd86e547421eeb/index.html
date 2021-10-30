@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Linux内核学习笔记（七）系统调用 | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="Linux内核学习笔记（七）系统调用 - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2018-05-30T09:06:54&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2018-05-30T09:06:54&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="Linux内核学习笔记（七）系统调用">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/4645655cea5d5b6ecb20280536cd86e547421eeb/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">Linux内核学习笔记（七）系统调用</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2018年5月30日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/linux">Linux</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h2 id="综述">综述</h2>
+
+<p>用户空间进程通过内核提供的一套接口和系统进行交互，这些接口让用户空间进程能够<strong>受控</strong>地访问系统资源、创建新的进程以及和其他进程通信等。<strong>受控</strong>表示用户进程不能不受限制地做任何想做的事情，这对保证系统的稳定非常关键。在Linux系统中，系统调用是除了exception和trap之外用户空间和内核交互的唯一方式。</p>
+
+<h2 id="api-posix-和-c-library">API，POSIX 和 C Library</h2>
+
+<p>API（Application Programming Interface）定义了一套给应用程序使用的编程接口，应用程序不会直接访问系统调用，而是通过API来间接的访问系统调用。一个API可以使用一个系统调用实现，也可以同时使用多个系统调用来实现，也可以不使用任何系统调用。相同的API可以同时在多个不同的系统中存在，它们为用户程序提供相同的接口，但是相同的API在不同系统上的具体实现则可能大相径庭。</p>
+
+<p>Unix中最常见的API是基于POSIX标准的，Linux尽力与POSIX标准兼容。POSIX是一个很好的用来说明API和系统调用关系的例子，在绝大多数Unix系统中，POSIX标准定义的API和Unix的系统调用有很大关联，因为POSIX标准就是参照早期的Unix系统来制定的，Windows操作系统也提供了与POXIS兼容的库。</p>
+
+<p>这里要说明两个容易混淆的概念：系统调用（system call）和系统调用接口（system call interface）。前者就是我们说的系统调用，但是系统调用并不是和API一样可以直接调用的，需要直接和CPU打交道，比如一种实现方式是通过汇编指令int $0x80来触发软中断，此外，还需要通过汇编指令来填充CPU的寄存器。Linux为我们提供了这些操作的宏定义，但是在应用中直接使用这些宏定义还是很麻烦的，所以Linux为我们提供了系统调用接口作为系统调用的封装函数（Wrapper Routine）来帮助我们轻松地访问系统调用。我们平时使用的如open()，fork()都是封装了系统调用的系统调用接口。</p>
+
+<p>Linux和大部分Unix系统的系统调用接口都由C库（C library，Linux中最常见实现的为glibc）提供，Linux中的C库同时包括了C语言标准库（standard C library）和系统调用接口。此外，Linux的C库还提供了POSIX表中规定的绝大部分API。</p>
+
+<h2 id="系统调用">系统调用</h2>
+
+<p>Linux下的应用程序通常通过C库提供的API来访问系统调用系统调用，系统调用会返回一个long型的返回值，0通常表示成功，负数通常代表出错。C库的API实现在系统调动返回了一个错误时，会将一个特殊的错误码写到全局变量errno中，通过库函数perror()可以将这个错误码翻译为用户可以理解的错误提示。</p>
+
+<p>Linux会给每个系统调用分配一个系统调用号（syscall number），这个全局唯一的调用号指向对应的系统调用函数。当用户程序发起系统调用时，系统调用号就被用来表明要执行哪一个系统调用，进程不能通过系统调用的名称来访问系统调用，必须通过系统调用号。内核在系统调用表sys_call_table中记录了所有注册过的系统调用，每种体系结构都会明确定义一个这样的表，在x86-64架构中，这个表定义在arch/i386/kernel/syscall_64.c中。这个表为每一个有效的系统调用指定了一个唯一的系统调用号</p>
+
+<p>Linux系统调用的执行速度比许多其他的操作系统都要快，主要原因包括Linux中很短的上下文切换时间，进入和退出内核空间的简单高效。系统调用处理程序的简洁和系统调用本身的执行效率也是因素之一。</p>
+
+<h2 id="系统调用处理程序-system-call-handler">系统调用处理程序（System Call Handler）</h2>
+
+<p>用户空间的应用不能直接执行内核代码，它们可以以某种方式给内核发送信号，告诉它想执行一个系统调用，希望系统切换到内核模式，然后内核代表应用程序在内核空间执行系统调用。</p>
+
+<p>给内核发送信号的方式主要有三种：</p>
+
+<ul>
+<li>软中断指令 int $0x80</li>
+<li>sysenter指令</li>
+<li>syscall指令</li>
+</ul>
+
+<p>软中断指令的方式是通过向CPU发送一个软中断，触发一个异常（exception）。软中断会让系统切换到内核模式，并执行异常处理程序，在系统调用的背景下，事实上执行的就是系统调用处理程序system_call()，x86架构上软中断的终端号是0x80，通过int $0x80来触发。sysenter 和 syscall是后来出现的方式，性能要优于软中断方式。</p>
+
+<p>进入内核后，内核需要区分不同的系统调用，然后执行对应的函数，这就需要将系统调用号传递给内核。在x86架构，系统调用通过CPU的eax寄存器将系统调用号传递给内核，用户空间将系统调用号放入eax中，然后内核从eax中读取，其他体系结构的做法是类似的。</p>
+
+<p>系统调用处理程序system_call()会检查系统调用号是否有效（比如系统调用号不存在），如果无效，返回 -ENOSYS。如果系统调用号有效，则执行指令：<strong>call *sys_call_table(0,%rax,8)</strong> 来执行对应的系统调用函数。sys_call_table中的元素是8字节的，所以内核将系统调用号乘以8就可以直接得到对应的系统调用函数入口。在0x86-32架构中，每个元素是4字节，所以把8换成4即可。</p>
+
+<p>下图显示了read()系统调用执行的过程。其中C library中的read()是封装函数，即系统调用接口，sys_read()才是真正的系统调用函数。</p>
+
+<p><img src="/images/系统调用过程.png" alt="read()系统调用" /></p>
+
+<p>大部分系统调用函数有一个或者多个参数，用户空间必须以某种方式将参数传递给内核，最简单的方式是采用和系统调用号一样的传递方式，即将参数写入CPU寄存器。在x86-32架构中，ebx, ecx, edx, esi 和 edi 这5个寄存器被用来按顺序放置前面5个参数，部分系统调用有6个或者更多的参数，寄存器不够用了，那么就在一个寄存器里面放置一个指向用户空间的指针，该指针指向的内存存储了所有的参数。</p>
+
+<p>系统调用的返回值也是通过寄存器从内核空间中传递给用户空间的，在x86架构中，返回值使用eax寄存器传递。</p>
+
+<h2 id="在内核线程中访问系统调用">在内核线程中访问系统调用</h2>
+
+<p>虽然系统调用主要被用户空间程序使用，但是内核线程一样可以使用系统调用，但是内核线程无法使用C库，所以没有封装函数可以用，需要自己写封装函数。Linux定一个了7个宏来简化封装函数的定义，这7个宏分别为_syscall0, _syscall1, _syscall2, _syscall3, _syscall4, _syscall5, _syscall6。宏名字后面的数字表示其封装的系统调用有几个参数，这些宏不能用于参数个数超过6个的系统调用的封装。（但是仍然可以不用宏，自己手动封装）。</p>
+
+<p>每个宏需要 2+2*n 个参数，n是系统调用的参数个数，最前面的两个参数规定了系统调用的返回类型和系统调用的名字。后面每2个参数分别规定对应位置的参数的类型和名字。</p>
+
+<p>下面的语句为fork()系统调用生成封装函数：
+<strong>_syscall0(int,fork)</strong></p>
+
+<p>write()系统调用可以通过下面的方式生成封装函数：
+_<strong>syscall3(int,write,int,fd,const char *,buf,unsigned int,count)</strong></p>
+
+<p>后者将产生下面的代码：</p>
+
+<pre><code class="language-C">int write(int fd,const char * buf,unsigned int count)
+{
+    long __res;
+    asm(&quot;int $0x80&quot;
+        : &quot;=a&quot; (__res)
+        : &quot;0&quot; (__NR_write), &quot;b&quot; ((long)fd),
+            &quot;c&quot; ((long)buf), &quot;d&quot; ((long)count));
+    if ((unsigned long)__res &gt;= (unsigned long)-129)
+    {
+        errno = -__res;
+        __res = -1;
+    }
+    return (int) __res;
+}
+</code></pre>
+
+<p>其中__NR_write宏是从_syscall3的第2个参数派生的，它将被展开为write()的系统调用号。上述代码编译后产生的汇编代码如下：</p>
+
+<pre><code class="language-x86asm">    write:
+    pushl %ebx              ; push ebx into stack
+    movl 8(%esp), %ebx      ; put first parameter in ebx
+    movl 12(%esp), %ecx     ; put second parameter in ecx
+    movl 16(%esp), %edx     ; put third parameter in edx
+    movl $4, %eax           ; put __NR_write in eax
+    int $0x80               ; invoke system call
+    cmpl $-125, %eax        ; check return code
+    jbe .L1                 ; if no error, jump
+    negl %eax               ; complement the value of eax
+    movl %eax, errno        ; put result in errno
+    movl $-1, %eax          ; set eax to -1
+.L1: popl %ebx              ; pop ebx from stack
+    ret                     ; return to calling program
+</code></pre>
+
+<p>可以看到在将系统调用号（%eax）、参数（ebx，ecx,edx)分别写入对应寄存器后，就会执行 int $0x80指令出发软中断。返回值被放入了eax寄存器中，如果发现返回值是一个错误码，封装程序会将-eax的值存入errno中，并将eax的值改为-1。最后返回。</p>
+
+<h2 id="参考资料">参考资料</h2>
+
+<p>《Linux Kernel Development 3rd Edition》</p>
+
+<p>《Understanding The Linux Kernel 3rd Edition》</p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/4645655cea5d5b6ecb20280536cd86e547421eeb/">https://www.huliujia.com/blog/4645655cea5d5b6ecb20280536cd86e547421eeb/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/3fbf8bbcd3d7fe167ceefd76538053515946babd/">Linux内核学习笔记（六）进程调度</a></li>
+        
+        <li><a href="/blog/9c6895a796464a3bac7fba4b17f76e1ae03d2ab4/">Linux内核学习笔记（五）进程地址空间</a></li>
+        
+        <li><a href="/blog/23e0a634f0ac72e53813ffbd8a042fbebff97041/">Linux内核学习笔记（四）进程管理</a></li>
+        
+        <li><a href="/blog/b332e9cef68c8d3efe84778931ffb98a6173812d/">Linux内核学习笔记（三）Block I/O层</a></li>
+        
+        <li><a href="/blog/0b652a8747751273cc34800581e12835351e5ae1/">Linux内核学习笔记（二）内存管理</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/linux">Linux</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8">系统调用</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

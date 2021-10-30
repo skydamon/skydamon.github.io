@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Docker on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/docker/</link>
+    <description>Recent content in Docker on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Fri, 30 Nov 2018 22:48:29 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/docker/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Docker基础使用</title>
+      <link>https://www.huliujia.com/blog/35072064cbab14191af21d31fb73f27a4be1c5d5/</link>
+      <pubDate>Fri, 30 Nov 2018 22:48:29 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/35072064cbab14191af21d31fb73f27a4be1c5d5/</guid>
+      <description>本文使用的运行环境 Ubuntu 16.04.5 LTS 全新安装Docker 参考：https://docs.docker.com/install/linux/docker-ce/ubuntu/ 安装依赖包 sudo apt-get update sudo apt-get install apt-transport-https ca-certificates curl software-properties-common 添加Docker的官方GPG key curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - 设置stable仓库</description>
+    </item>
+    
+  </channel>
+</rss>

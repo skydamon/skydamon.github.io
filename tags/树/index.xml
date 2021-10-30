@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>树 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E6%A0%91/</link>
+    <description>Recent content in 树 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Mon, 29 Jan 2018 08:50:20 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E6%A0%91/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>二叉树的遍历（先序遍历，中序遍历，后序遍历，层次遍历）</title>
+      <link>https://www.huliujia.com/blog/e06651c8dbbb668c7476bd922f78127a72f7eec3/</link>
+      <pubDate>Mon, 29 Jan 2018 08:50:20 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/e06651c8dbbb668c7476bd922f78127a72f7eec3/</guid>
+      <description>二叉树简介 维基百科对二叉树的定义：二叉树（英语：Binary tree）是每个节点最多只有两个分支(不存在分支度大于2的节点)的树结构。通常分支被称作“左子树”和“右子树”。二叉树的分支具有左右次序，不能颠倒。 二叉树的遍历有4种方式，先序遍历，中序遍历，后序</description>
+    </item>
+    
+    <item>
+      <title>Trie，单词查找树</title>
+      <link>https://www.huliujia.com/blog/4c5cd4dd260a03535d12579195dfaf17e57c3b43/</link>
+      <pubDate>Sat, 27 Jan 2018 09:01:43 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/4c5cd4dd260a03535d12579195dfaf17e57c3b43/</guid>
+      <description>Trie简介 Trie，又称前缀树或字典树，是一种有序树，用于保存关联数组，其中的键通常是字符串。与二叉查找树不同，键不是直接保存在节点中，而是由节点在树中的位置决定。一个节点的所有子孙都有相同的前缀，也就是这个节点对应的字符串，而根节点对应空字符串。一般情</description>
+    </item>
+    
+  </channel>
+</rss>

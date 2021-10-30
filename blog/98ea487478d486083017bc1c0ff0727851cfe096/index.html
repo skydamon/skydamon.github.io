@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Linux内核学习笔记（九）中断和中断处理程序 | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="Linux内核学习笔记（九）中断和中断处理程序 - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2018-06-04T11:23:18&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2018-06-04T11:23:18&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="Linux内核学习笔记（九）中断和中断处理程序">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/98ea487478d486083017bc1c0ff0727851cfe096/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">Linux内核学习笔记（九）中断和中断处理程序</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2018年6月4日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/linux">Linux</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h2 id="中断">中断</h2>
+
+<p>为了对计算机的硬件（键盘，硬盘，鼠标，网卡等）进行管理，内核需要和这些硬件通信。一种方式是使用轮训（polling）的方式，这种方式周期性地查看所有硬件设备的状态并做相应处理，这会造成很多不必要的系统开销。Linux内核使用中断的方式来管理硬件设备，中断本质上是一种电信号，设备通过和中断控制器引脚相连的总线发出电信号来发出中断。中断控制器是一种控制芯片，多个设备的中断请求线同时连接到中断控制器上，如果多个设备同时发出中断信号，中断控制器根据优先级选择其中一个发送给处理器处理器，处理器收到中断请求后，就中断当前正在执行的任务，进行中断处理。内核通过中断号（中断号是系统为每个中断请求线interrupt request line分配的编号）来区分不同的设备产生的中断，从而执行对应的中断处理程序。</p>
+
+<p>人们经常把中断和异常（Exception）放在一起讨论，前者是异步中断，后者是同步中断。同步是指在一个处理器指令执行完毕后产生的（是由处理器产生的），异步指的是在任何时候都有可能发生，和处理器是否完成当前指令无关，当然处理器会将正在执行的指令执行完毕才会去检查是否有中断请求。异常又可以分为处理器检测到的异常(Processor-detected exception)和可编程的异常(programmmed exception)，前者又分为fault, trap, abort三种，后者是为了进入内核态（软中断/系统调用）。缺页异常和除以0都属于fault。异常的具体分类在网上看到了很多，各有各的说法，看得我大脑都混乱了，这里的分类参考的是<a href="http://www.cs.columbia.edu/~krj/os/lectures/L07-LinuxEvents.pdf">哥伦比亚大学的一份上课PPT</a>的分类法。</p>
+
+<h2 id="中断处理程序">中断处理程序</h2>
+
+<p>当接收到一个中断时，内核会执行中断处理程序（interrupt handler），每个可以产生中断的设备都有一个对应的中断处理程序。中断处理程序是设备驱动的一部分，中断处理程序的函数声明必须遵照规定的格式，中断处理程序本质上是一个函数，和内核其他函数的区别在于中断处理程序是由内核响应中断时调用的，它运行在一个被称为中断上下文的特殊上下文中。中断上下文中不能被阻塞，所以有时候也会被称为原子上下文。</p>
+
+<p>中断处理程序必须快速地完成执行，这样才能快速地对中断做出响应的同时确保被中断抢占的代码可以尽快地恢复执行。但是中断处理程序往往有大量工作要做，比如网卡的中断处理程序就需要将网络中的数据包从硬件上复制到内存中，处理数据包，最后将数据包交给合适的协议栈或者应用程序。</p>
+
+<h2 id="上半部和下半部">上半部和下半部</h2>
+
+<p>中断程序有两个目标：快速完成执行和处理大量工作。很显然，这两个目标是冲突的。为了能够同时达到这两个目标，对中断的响应被分成了两部分：上半部和下半部。上半部是中断处理程序，上半部在接受到中断请求后立刻执行，但是只处理对时延敏感的任务，如对中断进行应答（通过给中断线置低电平告诉设备处理器已经收到中断了）或者复位硬件。对时延不敏感的任务都被放在了下半部，延后执行（下一篇博文将会介绍下半部）。</p>
+
+<p>还是以网卡为例，网卡收到数据包，发出中断请求，告诉内核收到了数据包。因为网卡上接受数据包的缓冲区大小固定，并且比系统内存小得多，为了避免网卡缓冲区溢出丢包，内核需要快速的完成以下工作：通知网卡中断已经响应（通常是给网卡的寄存器复位）并将数据包拷贝到系统内存，到此中断处理程序（上半部）完成，然后将处理器的使用权交还给内核其他部分（调度程序这个时候就要负责选择下一个执行的进程了，详见<a href="/blog/3fbf8bbcd3d7fe167ceefd76538053515946babd/">Linux内核学习笔记（六）进程调度</a>）</p>
+
+<h2 id="中断处理程序的注册-注销和实现">中断处理程序的注册、注销和实现</h2>
+
+<h3 id="注册">注册</h3>
+
+<p>每个设备都有一个对应的设备驱动，如果该设备使用中断（大部分都会使用），那么设备驱动必须要注册一个中断处理程序。注册中断处理程序的函数是 request_irq()，声明在&lt;linux/interrupt.h&gt;中，声明如下:</p>
+
+<pre><code class="language-C">/* request_irq: allocate a given interrupt line */
+int request_irq(unsigned int irq, irq_handler_t handler,
+                unsigned long flags, const char *name, void *dev)
+</code></pre>
+
+<p>参数irq是对应的终端号。系统时钟和键盘这样的传统PC设备的中断号通常是固定的，对于大部分设备，这个值是动态确定的（通过探测或者编程方式）。
+参数handler是一个函数指针，指向要注册的中断处理程序。</p>
+
+<p>参数flags是作为bitmask使用，规定了中断和中断处理程序的一些属性，比较重要的有：</p>
+
+<ul>
+<li>IRQF_DISABLED 内核在执行该中断处理程序时会禁止所有中断。如果没有这个，内核只会禁止当前的中断处理程序的中断请求线，其他中断请求线仍然可以发出中断，这意味着当前中断处理程序可能会被其他优先级更高的中断请求线的处理程序抢占，这就也叫做中断嵌套。</li>
+<li>IRQF_SAMPLE_RANDOM 该设备产生的中断会为内核熵池（entropy pool）作出贡献，内核熵池负责从各种随机事件（比如中断）中衍生出真正的随机数。</li>
+<li>IRQF_SHARED 这个标志表示该中断线可以被多个中断处理程序共享（即多个设备共用同一个中断线，个人感觉一个设备注册多个共享中断线的中断处理程序也是有可能的，但是估计不会有人这样做）</li>
+</ul>
+
+<p>参数name用于传入设备的名字。</p>
+
+<p>参数dev用于区分共享同一个中断线的多个中断处理程序（注销共享中断线的其中一个中断处理程序时要用到）以及给中断处理程序传递有价值的数据（实践中通常会传递设备驱动用来表示设备的device结构）。</p>
+
+<p>如果irq对应的中断线当前处于禁用状态（说明没有中断处理程序注册在该中断线上），request_irq()还会激活该中断线。因为request_irq()可能阻塞，所以不能在中断上下文（interrupt context，稍后会详细介绍）中调用。并且无论IRQF_DISABLED是否被设置，内核都会禁用当前中断处理程序的中断线，所以共享同一个中断线的中断处理程序不会发生嵌套或者重入（后面有详细讨论）。</p>
+
+<h3 id="注销">注销</h3>
+
+<p>当卸载一个设备的时候，需要注销该设备的中断处理程序。注销函数是</p>
+
+<pre><code class="language-C">void free_irq(unsigned int irq, void *dev)
+</code></pre>
+
+<p>如果中断号irq对应的中断线不是共享的，free_irq()会将irq的中断处理程序移除，并禁用irq对应的中断线。如果中断号irq是共享的，free_irq()会将dev对应的中断处理程序移除，如果移除的中断处理程序是irq的最后一个中断处理程序，那么free_irq()会同时禁用irq对应的中断线。因为free_irq()可能被阻塞，所以同样不能在中断上下文中调用。</p>
+
+<h3 id="实现">实现</h3>
+
+<p>中断处理程序的声明规范如下：</p>
+
+<pre><code class="language-C">static irqreturn_t intr_handler(int irq, void *dev)
+</code></pre>
+
+<p>irq是该中断处理程序要处理的中断请求线的中断号。dev和传递给request_irq()的dev是一样的，用于区分共享中断线的中断处理程序。dev可以指向中断处理程序使用的数据结构，通常驱动中用于表示设备的device结构，这样既能保证唯一性，也可以给中断处理程序提供有价值的数据。中断处理程序的返回值irqreturen_t实质上就是int，但是只有两种返回值：IRQ_NONE和IRQ_HANDLED。中断处理程序被调用时如果发现不是自己的设备发出的中断，就会返回IRQ_NONE。如果判断是自己的设备发出的中断时，就会在处理后返回IRQ_HANDLED。</p>
+
+<p>中断处理程序的工作内容完全取决于设备和产生中断的原因，但是一个最基本的任务是告诉设备中断已经被响应（中断应答）。复杂的设备通常需要发送、接受数据以及执行额外的工作。驱动程序的编写者需要决定哪些任务必须放在上半部，哪些任务可以放在下半部，能放在下半部的任务要尽可能地放在下半部。</p>
+
+<h2 id="中断上下文">中断上下文</h2>
+
+<p>当执行一个中断处理程序时，内核处于中断上下文（interrupt context）中。与中断上下文相对的是进程上下文，进程上下文是内核所处的工作模式（注意只有在内核态才可能处于进程上下文），在进程上下文中，内核代表进程执行——比如执行系统调用和运行内核线程，此时可以通过current宏访问当前进程。在进程上下文中可以睡眠。（我个人的理解是中断处理不是一个进程，也没有关联的进程，只有关联的中断。而系统调用或者内核线程执行时有关联的进程，所以是在进程上下文中。此外<a href="https://www.quora.com/What-is-a-process-context-when-talking-about-IRQ-registration">《Linux Kernel Development 3rd》的作者Robert Love在Quora上亲自回答了进程上下文的问题</a>，说得很详细，可以点击去看一下。）</p>
+
+<p>中断上下文不和一个进程关联（虽然current宏指向被中断的进程），因为没有一个后备的关联进程，因为无法被再次调度，所以中断上下文不能睡眠（我个人对此的理解是因为没有关联的进程，所以没有可用于切换时保存上下文数据的对象。那为什么不让中断处理程序关联一个进程呢，因为这样的话，虽然可以切换出去了，但是在中断处理程序（或者说上半部）中的任务是时延敏感的，必须立刻执行完毕，所以不能切换出去，那么也就没必要关联一个进程了）。所以不能在中断上下文中调用可能睡眠的函数，这限制了中断处理程序的能力（可以做的事情）。</p>
+
+<p>中断处理程序使用自己的栈——中断栈（interrupt stack）。中断栈每个处理器一个，栈大小为一个页大小（在32bit机器中通常为4KB)。早起内核版本中，中断程序共用被中断的进程的内核栈。</p>
+
+<h2 id="一个中断处理的详细过程">一个中断处理的详细过程</h2>
+
+<p>中断处理程序的实现是和体系结构、处理器、中断控制器类型、机器本身密切相关的，下图展示了从硬件发出中断到中断处理返回的完整流程图</p>
+
+<p><img src="/images/中断流程图.png" alt="中断处理流程图" /></p>
+
+<p>硬件设备通过和中断控制器连接的总线发出电信号来向中断控制器发出中断，如果中断请求线是激活的（中断线是可以被屏蔽的），中断控制器将中断发送给处理器，除非处理器禁用中断了（这也同样是可能的，稍后会说），否则，处理器会在执行完当前指令后，禁用处理器中断，然后跳转到预先设置好的内存位置，并执行那里的代码。这个位置是内核设置的处理中断请求的程序的入口点，入口点是中断在内核中旅行的起点。</p>
+
+<p>入口点会将中断号和被中断进程的寄存器值保存到中断栈中，然后调用do_IRQ()，do_IRQ()从中断栈中提取中断号，然后给该中断线发送一个中断应答信号（其实就是让CPU回送一个低电平的电信号），并禁用该中断线，然后调用handle_IRQ_event()。</p>
+
+<p>handle_IRQ_event()先检查IRQF_DISABLE是否被设置，如果没有设置，就重新打开处理器中断（处理器收到中断后把处理器中断禁用了)，需要注意的是当前的中断线仍然是禁用的。然后handle_IRQ_event()会按序调用注册在该中断线上的所有中断处理程序，每个中断处理程序都要先检查自己的设备是否发出了中断，如果没有立刻返回，返回值为IRQ_NONE，如果有就进行中断处理，最后返回IRQ_HANDLED。通常这种判断是通过查看设备上的状态寄存器来判断的。（补充说明一点：多个设备共享一个中断线时，如果该中断线产生了中断，那么该中断线上可能只有一个设备发出了中断，也有可能有多个设备同时发出了中断（其实就是中断线被置了高电平），所以该中断线上的每个中断处理程序都会被调用一次）</p>
+
+<h2 id="查看中断系统的状态-proc-interrupts">查看中断系统的状态 /proc/interrupts</h2>
+
+<p>查看/proc/interrupts可以获得当前系统中注册的中断以及他们的统计信息，包括被注册过的中断号、每个CPU收到的该中断号的次数以及该中断号的中断处理程序的名字、设备的名字。</p>
+
+<h2 id="参考资料">参考资料</h2>
+
+<p>《Linux Kernel Development 3rd Edition》</p>
+
+<p>《Understanding The Linux Kernel 3rd Edition》</p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/98ea487478d486083017bc1c0ff0727851cfe096/">https://www.huliujia.com/blog/98ea487478d486083017bc1c0ff0727851cfe096/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/6d9091df3638fb9f6cea7867d7dd2e8281435b8c/">Linux内核学习笔记（八）Page Cache与Page回写</a></li>
+        
+        <li><a href="/blog/4645655cea5d5b6ecb20280536cd86e547421eeb/">Linux内核学习笔记（七）系统调用</a></li>
+        
+        <li><a href="/blog/3fbf8bbcd3d7fe167ceefd76538053515946babd/">Linux内核学习笔记（六）进程调度</a></li>
+        
+        <li><a href="/blog/9c6895a796464a3bac7fba4b17f76e1ae03d2ab4/">Linux内核学习笔记（五）进程地址空间</a></li>
+        
+        <li><a href="/blog/23e0a634f0ac72e53813ffbd8a042fbebff97041/">Linux内核学习笔记（四）进程管理</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/linux">Linux</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86">中断处理</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

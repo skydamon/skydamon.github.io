@@ -7,18 +7,22 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <title>胡刘郏的技术博客 | Stay hungry. Stay foolish.</title>
-    <meta property="og:title" content="胡刘郏的技术博客 | Stay hungry. Stay foolish.">
-    <meta property="og:type" content="website">
+    <title>LevelDB | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="LevelDB - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+        
     <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
-    <meta name="description" content="">
-    <meta property="og:url" content="https://www.huliujia.com/">
+    <meta name="description" content="LevelDB">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/tags/leveldb/">
     <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
 
     <link rel="stylesheet" href="/css/normalize.css">
     
     <link rel="stylesheet" href="/css/style.css">
-    <link rel="alternate" type="application/rss+xml+xml" href="https://www.huliujia.com/index.xml" title="胡刘郏的技术博客" />
+    <link rel="alternate" type="application/rss+xml+xml" href="https://www.huliujia.com/tags/leveldb/index.xml" title="胡刘郏的技术博客" />
     <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
 
     
@@ -35,17 +39,15 @@
         <div class="col-group">
             <div class="site-name ">
                 
-                    <h1>
-                        <a id="logo" href="https://www.huliujia.com/">
-                            胡刘郏的技术博客
-                        </a>
-                    </h1>
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
                 
                 <p class="description">Stay hungry. Stay foolish.</p>
             </div>
             <div>
                 <nav id="nav-menu" class="clearfix">
-                    <a class="current" href="https://www.huliujia.com/">首页</a>
+                    <a class="" href="https://www.huliujia.com/">首页</a>
                     
                     <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
                     
@@ -63,236 +65,245 @@
             <div class="col-8" id="main">
                 <div class="res-cons">
                     
+                    <h3 class="archive-title">
+                        包含标签
+                        <span class="keyword">LevelDB</span>
+                        的文章
+                    </h3>
+                    
+
+                    
                         <article class="post">
                             <header>
-                                <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite" >LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+                                <h1 class="post-title">
+                                    <a href="https://www.huliujia.com/blog/056e5fe63f/">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
                                 2021年10月30日
                             </date>
                             
-                            <div class="post-meta">
-                                <span>|</span>
+                            <div class="post-meta meta-category">
+                                |
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                    <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a>
                                 
                             </div>
                             
                             <div class="post-content">
                                 背景 LevelDB每次写入key-value都是写入到内存中的Memtable中的，但是Memtable的空间不是无限的，Memtable写满后，就需要调用MakeRoomForWrite把Memtable转存为Immutable Memtable，并创建新……
+                                <p class="readmore"><a href="https://www.huliujia.com/blog/056e5fe63f/">阅读全文</a></p>
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/056e5fe63f/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
-                                <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程" >LevelDB源码解析(14) 写操作之Write主流程</a>
+                                <h1 class="post-title">
+                                    <a href="https://www.huliujia.com/blog/24af576aa3/">LevelDB源码解析(14) 写操作之Write主流程</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
                                 2021年10月28日
                             </date>
                             
-                            <div class="post-meta">
-                                <span>|</span>
+                            <div class="post-meta meta-category">
+                                |
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                    <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a>
                                 
                             </div>
                             
                             <div class="post-content">
                                 leveldb对外提供的写入接口是Put，Put的实现如下： Status DB::Put(const WriteOptions &amp;opt, const Slice &amp;key, const Slice &amp;value) { WriteBatch batch; batch.Put(key, value); return Write(opt, &amp;batch); } WriteBatch是一个比较简单的类，只有一个string类型的成员变量rep_。提供了插入、删除、遍历等操作，详细实现可以参考LevelDB源码解析(5)……
+                                <p class="readmore"><a href="https://www.huliujia.com/blog/24af576aa3/">阅读全文</a></p>
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/24af576aa3/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
-                                <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并" >LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+                                <h1 class="post-title">
+                                    <a href="https://www.huliujia.com/blog/4496bd928e/">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
                                 2021年10月26日
                             </date>
                             
-                            <div class="post-meta">
-                                <span>|</span>
+                            <div class="post-meta meta-category">
+                                |
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                    <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a>
                                 
                             </div>
                             
                             <div class="post-content">
                                 背景 LevelDB的名字中的Level表示文件是分层存储的，默认最多7层，每层有0到N个文件。除了L0层，每层内部的文件之间都是有序的(所谓Sorted String Table)，互斥的(相互之间的key范围没有重叠)。而L0层的文件都是从Memtable直接落盘的，……
+                                <p class="readmore"><a href="https://www.huliujia.com/blog/4496bd928e/">阅读全文</a></p>
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/4496bd928e/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
-                                <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘" >LevelDB源码解析(12) Memtable落盘</a>
+                                <h1 class="post-title">
+                                    <a href="https://www.huliujia.com/blog/124132a9b3/">LevelDB源码解析(12) Memtable落盘</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
                                 2021年10月6日
                             </date>
                             
-                            <div class="post-meta">
-                                <span>|</span>
+                            <div class="post-meta meta-category">
+                                |
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                    <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a>
                                 
                             </div>
                             
                             <div class="post-content">
                                 背景 LevelDB源码解析(4) MemTable介绍了Memtable，LevelDB会先把key-value插入到MemTable中。如果MemTable写满了，就会新建一个MemTable进行写入。旧的Memtablex会落盘。一个Memtable会产……
+                                <p class="readmore"><a href="https://www.huliujia.com/blog/124132a9b3/">阅读全文</a></p>
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/124132a9b3/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
-                                <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构" >LevelDB源码解析(11) SST文件结构</a>
+                                <h1 class="post-title">
+                                    <a href="https://www.huliujia.com/blog/6974db6de9/">LevelDB源码解析(11) SST文件结构</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
                                 2021年10月5日
                             </date>
                             
-                            <div class="post-meta">
-                                <span>|</span>
+                            <div class="post-meta meta-category">
+                                |
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                    <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a>
                                 
                             </div>
                             
                             <div class="post-content">
                                 背景 前面我们逐渐深入的介绍了LevelDB从插入key-value到落盘的整个过程，感兴趣的读者可以移步相关文章： LevelDB源码解析(4) MemTable LevelDB源码解析(5) WriteBatch LevelDB源码解析(6) 写任务(WriterBatch)合并 LevelDB源码……
+                                <p class="readmore"><a href="https://www.huliujia.com/blog/6974db6de9/">阅读全文</a></p>
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/6974db6de9/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
-                                <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）" >LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+                                <h1 class="post-title">
+                                    <a href="https://www.huliujia.com/blog/02ad8ac30a/">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
                                 2021年10月5日
                             </date>
                             
-                            <div class="post-meta">
-                                <span>|</span>
+                            <div class="post-meta meta-category">
+                                |
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                    <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a>
                                 
                             </div>
                             
                             <div class="post-content">
                                 背景 在LevelDB源码解析(4) MemTable中我们介绍了Memtable，LevelDB会先把key-value插入到MemTable中。如果MemTable写满了，就会新建一个MemTable进行写入。旧的Memtable(也叫Immutable M……
+                                <p class="readmore"><a href="https://www.huliujia.com/blog/02ad8ac30a/">阅读全文</a></p>
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/02ad8ac30a/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
-                                <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder" >LevelDB源码解析(9) FilterBlockBuilder</a>
+                                <h1 class="post-title">
+                                    <a href="https://www.huliujia.com/blog/1a8dbd0991/">LevelDB源码解析(9) FilterBlockBuilder</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
                                 2021年10月4日
                             </date>
                             
-                            <div class="post-meta">
-                                <span>|</span>
+                            <div class="post-meta meta-category">
+                                |
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                    <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a>
                                 
                             </div>
                             
                             <div class="post-content">
                                 背景 Filter block为SST中一个区块，filter block由多个filter组成，每个data block对应一个filter（但是一个filter可能对应多个data block）。LevelDB在进入data block中查找前会先检查filter，如果fi……
+                                <p class="readmore"><a href="https://www.huliujia.com/blog/1a8dbd0991/">阅读全文</a></p>
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/1a8dbd0991/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
-                                <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder" >LevelDB源码解析(8) BlockBuilder</a>
+                                <h1 class="post-title">
+                                    <a href="https://www.huliujia.com/blog/6a7ee0401f/">LevelDB源码解析(8) BlockBuilder</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
                                 2021年10月4日
                             </date>
                             
-                            <div class="post-meta">
-                                <span>|</span>
+                            <div class="post-meta meta-category">
+                                |
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                    <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a>
                                 
                             </div>
                             
                             <div class="post-content">
                                 背景 一个SST文件由5个区块组成，其中三个区块都是由BlockBuilder构建的，所以在讲SST文件的构建之前，先讲一下BlockBuilder。BlockBuilder接受一组key-value，将其序列化到buffer中，buffer的数据就是要写入……
+                                <p class="readmore"><a href="https://www.huliujia.com/blog/6a7ee0401f/">阅读全文</a></p>
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/6a7ee0401f/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
-                                <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)" >LevelDB源码解析(7) 预写日志(WAL)</a>
+                                <h1 class="post-title">
+                                    <a href="https://www.huliujia.com/blog/e8d980b551/">LevelDB源码解析(7) 预写日志(WAL)</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
                                 2021年10月2日
                             </date>
                             
-                            <div class="post-meta">
-                                <span>|</span>
+                            <div class="post-meta meta-category">
+                                |
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                    <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a>
                                 
                             </div>
                             
                             <div class="post-content">
                                 背景 LevelDB每次写key-value不会直接写到文件中，而是先暂存在Memtable中，Memtable写满后再写到文件中。如果发生故障(比如宕机)，保存在Memtable中的key-value就会全部丢失。所以为了保证数据的原子性和持久性，每次写k……
+                                <p class="readmore"><a href="https://www.huliujia.com/blog/e8d980b551/">阅读全文</a></p>
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/e8d980b551/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
-                                <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并" >LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+                                <h1 class="post-title">
+                                    <a href="https://www.huliujia.com/blog/cc155a0319/">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
                                 2021年10月1日
                             </date>
                             
-                            <div class="post-meta">
-                                <span>|</span>
+                            <div class="post-meta meta-category">
+                                |
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                    <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a>
                                 
                             </div>
                             
                             <div class="post-content">
                                 背景 写任务合并是由函数BuildBatchGroup来完成的，BuildBatchGroup会把任务队列writers_中若干个Writer的数据合并到一起，从而减少磁盘写次数，提高写性能。虽然每次写入的时候是往Memtable里写，但是为了在故障发生时保……
+                                <p class="readmore"><a href="https://www.huliujia.com/blog/cc155a0319/">阅读全文</a></p>
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/cc155a0319/">阅读全文</a></p>
                         </article>
                     
+
                     
 
 
@@ -302,33 +313,17 @@
 
     
     <li  class="current">
-        <a href="https://www.huliujia.com/">1</a>
+        <a href="https://www.huliujia.com/tags/leveldb/">1</a>
     </li>
     
     <li >
-        <a href="https://www.huliujia.com/page/2/">2</a>
-    </li>
-    
-    <li >
-        <a href="https://www.huliujia.com/page/3/">3</a>
-    </li>
-    
-    <li >
-        <a href="https://www.huliujia.com/page/4/">4</a>
-    </li>
-    
-    <li >
-        <a href="https://www.huliujia.com/page/5/">5</a>
-    </li>
-    
-    <li >
-        <a href="https://www.huliujia.com/page/6/">6</a>
+        <a href="https://www.huliujia.com/tags/leveldb/page/2/">2</a>
     </li>
     
 
     
     <li class="next">
-        <a href="https://www.huliujia.com/page/2/">下一页</a>
+        <a href="https://www.huliujia.com/tags/leveldb/page/2/">下一页</a>
     </li>
     
 </ol>
@@ -400,6 +395,54 @@
 </ul>
     </section>
 
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
     
 
     <section class="widget">

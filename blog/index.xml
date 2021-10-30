@@ -1,0 +1,537 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Blogs on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/blog/</link>
+    <description>Recent content in Blogs on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 30 Oct 2021 14:28:02 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/blog/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>LevelDB源码解析(15) 写操作之MakeRoomForWrite</title>
+      <link>https://www.huliujia.com/blog/056e5fe63f/</link>
+      <pubDate>Sat, 30 Oct 2021 14:28:02 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/056e5fe63f/</guid>
+      <description>背景 LevelDB每次写入key-value都是写入到内存中的Memtable中的，但是Memtable的空间不是无限的，Memtable写满后，就需要调用MakeRoomForWrite把Memtable转存为Immutable Memtable，并创建新</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(14) 写操作之Write主流程</title>
+      <link>https://www.huliujia.com/blog/24af576aa3/</link>
+      <pubDate>Thu, 28 Oct 2021 09:07:39 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/24af576aa3/</guid>
+      <description>leveldb对外提供的写入接口是Put，Put的实现如下： Status DB::Put(const WriteOptions &amp;amp;opt, const Slice &amp;amp;key, const Slice &amp;amp;value) { WriteBatch batch; batch.Put(key, value); return Write(opt, &amp;amp;batch); } WriteBatch是一个比较简单的类，只有一个string类型的成员变量rep_。提供了插入、删除、遍历等操作，详细实现可以参考LevelDB源码解析(5)</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(13) BackgroundCompaction SST文件合并</title>
+      <link>https://www.huliujia.com/blog/4496bd928e/</link>
+      <pubDate>Tue, 26 Oct 2021 09:23:59 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/4496bd928e/</guid>
+      <description>背景 LevelDB的名字中的Level表示文件是分层存储的，默认最多7层，每层有0到N个文件。除了L0层，每层内部的文件之间都是有序的(所谓Sorted String Table)，互斥的(相互之间的key范围没有重叠)。而L0层的文件都是从Memtable直接落盘的，</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(12) Memtable落盘</title>
+      <link>https://www.huliujia.com/blog/124132a9b3/</link>
+      <pubDate>Wed, 06 Oct 2021 09:45:45 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/124132a9b3/</guid>
+      <description>背景 LevelDB源码解析(4) MemTable介绍了Memtable，LevelDB会先把key-value插入到MemTable中。如果MemTable写满了，就会新建一个MemTable进行写入。旧的Memtablex会落盘。一个Memtable会产</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(11) SST文件结构</title>
+      <link>https://www.huliujia.com/blog/6974db6de9/</link>
+      <pubDate>Tue, 05 Oct 2021 16:53:44 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/6974db6de9/</guid>
+      <description>背景 前面我们逐渐深入的介绍了LevelDB从插入key-value到落盘的整个过程，感兴趣的读者可以移步相关文章： LevelDB源码解析(4) MemTable LevelDB源码解析(5) WriteBatch LevelDB源码解析(6) 写任务(WriterBatch)合并 LevelDB源码</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(10) TableBuilder（Memtable序列化）</title>
+      <link>https://www.huliujia.com/blog/02ad8ac30a/</link>
+      <pubDate>Tue, 05 Oct 2021 10:33:18 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/02ad8ac30a/</guid>
+      <description>背景 在LevelDB源码解析(4) MemTable中我们介绍了Memtable，LevelDB会先把key-value插入到MemTable中。如果MemTable写满了，就会新建一个MemTable进行写入。旧的Memtable(也叫Immutable M</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(9) FilterBlockBuilder</title>
+      <link>https://www.huliujia.com/blog/1a8dbd0991/</link>
+      <pubDate>Mon, 04 Oct 2021 21:52:31 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/1a8dbd0991/</guid>
+      <description>背景 Filter block为SST中一个区块，filter block由多个filter组成，每个data block对应一个filter（但是一个filter可能对应多个data block）。LevelDB在进入data block中查找前会先检查filter，如果fi</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(8) BlockBuilder</title>
+      <link>https://www.huliujia.com/blog/6a7ee0401f/</link>
+      <pubDate>Mon, 04 Oct 2021 10:45:17 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/6a7ee0401f/</guid>
+      <description>背景 一个SST文件由5个区块组成，其中三个区块都是由BlockBuilder构建的，所以在讲SST文件的构建之前，先讲一下BlockBuilder。BlockBuilder接受一组key-value，将其序列化到buffer中，buffer的数据就是要写入</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(7) 预写日志(WAL)</title>
+      <link>https://www.huliujia.com/blog/e8d980b551/</link>
+      <pubDate>Sat, 02 Oct 2021 08:36:10 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/e8d980b551/</guid>
+      <description>背景 LevelDB每次写key-value不会直接写到文件中，而是先暂存在Memtable中，Memtable写满后再写到文件中。如果发生故障(比如宕机)，保存在Memtable中的key-value就会全部丢失。所以为了保证数据的原子性和持久性，每次写k</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(6) 写任务(WriterBatch)合并</title>
+      <link>https://www.huliujia.com/blog/cc155a0319/</link>
+      <pubDate>Fri, 01 Oct 2021 12:08:07 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/cc155a0319/</guid>
+      <description>背景 写任务合并是由函数BuildBatchGroup来完成的，BuildBatchGroup会把任务队列writers_中若干个Writer的数据合并到一起，从而减少磁盘写次数，提高写性能。虽然每次写入的时候是往Memtable里写，但是为了在故障发生时保</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(5) WriteBatch</title>
+      <link>https://www.huliujia.com/blog/3c240f2a7b/</link>
+      <pubDate>Sun, 18 Apr 2021 21:34:10 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/3c240f2a7b/</guid>
+      <description>简介 LevelDB的官方注释是这么介绍WriteBatch的： WriteBatch holds a collection of updates to apply atomically to a DB 如何保证原子性可能需要看完对WriteBatch的使用才能理清楚，这里只能确定一个WriteBatch对象可以包含多条更新记录（插入/删除），支持批量写入。 WriteBa</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(4) MemTable</title>
+      <link>https://www.huliujia.com/blog/c5e8646cb4765da867b3936b2bae62843bded7e5/</link>
+      <pubDate>Sun, 11 Apr 2021 21:28:49 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/c5e8646cb4765da867b3936b2bae62843bded7e5/</guid>
+      <description>简介 MemTable是LevelDB在内存中的缓存库。用户写入数据时，LevelDB会先把数据写入到MemTable中。如果MemTable写满了，就会新建一个MemTable进行写入。后台再异步把旧的MemTable压缩写到磁盘上。因为旧的MemTabl</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(3) 变长编码</title>
+      <link>https://www.huliujia.com/blog/7c34da2c9a2d27bea2ec43f9a0401724bc48bffd/</link>
+      <pubDate>Sun, 04 Apr 2021 18:35:23 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7c34da2c9a2d27bea2ec43f9a0401724bc48bffd/</guid>
+      <description>背景 LevelDB在内存中存储key、value时，最后是以单值形式存储到一个跳跃表中的，跳跃表我们在上一篇文章LevelDB源码解析之SkipList(跳跃表）聊过了。这里主要想谈一下，LevelDB是如何把key、value编码到一个单值里面的，顺带分</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(2) SkipList(跳跃表)</title>
+      <link>https://www.huliujia.com/blog/bcd8d4d2415144bf21c2e3fc695cf55510653264/</link>
+      <pubDate>Sun, 28 Mar 2021 22:35:46 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/bcd8d4d2415144bf21c2e3fc695cf55510653264/</guid>
+      <description>背景 SkipList是LevelDB的MemTable使用的底层存储结构，LevelDB实现了一个支持泛型的跳跃表。本文不会具体介绍跳跃表的数据结构，如果读者不了解跳跃表的原理、实现，可以先看一下跳跃表（Skiplist）从原理到实现 SkipList的对外</description>
+    </item>
+    
+    <item>
+      <title>跳跃表（SkipList）从原理到实现</title>
+      <link>https://www.huliujia.com/blog/071730c4c3f23dbd8c6eaf0e524873206fcf56d3/</link>
+      <pubDate>Sat, 27 Mar 2021 21:14:23 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/071730c4c3f23dbd8c6eaf0e524873206fcf56d3/</guid>
+      <description>数组与链表 数组和链表是非常基础的两种数据结构，链表每次查找都需要从头结点开始线性遍历，时间复杂度是O(n)。而数组通过维护元素顺序可以使用二分查找，查找的时间复杂度是O(lg(n))。查找效率方面数组完胜链表。 但是由于数组插入或删除元素时必须要移动所有受影</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(1) Arena内存分配器</title>
+      <link>https://www.huliujia.com/blog/e6640480282d9a4273dcf04cb98adc60c2961dd5/</link>
+      <pubDate>Tue, 09 Mar 2021 08:56:50 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/e6640480282d9a4273dcf04cb98adc60c2961dd5/</guid>
+      <description>背景 LevelDB中需要频繁申请和释放内存，如果直接使用系统的new/delete或者malloc/free接口申请和释放内存，会产生大量内存碎片，进而拖累系统的性能表现。所以LevelDB实现了一个Area内存分配器来对内存进行管理，以保证性能。 Aren</description>
+    </item>
+    
+    <item>
+      <title>C/C&#43;&#43;中的断言(assert与static_assert)</title>
+      <link>https://www.huliujia.com/blog/f453c2a517ce997074a145325aef93abf2d91a67/</link>
+      <pubDate>Sat, 30 Jan 2021 11:20:23 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/f453c2a517ce997074a145325aef93abf2d91a67/</guid>
+      <description>assert简介 assert被C/C++用来判断某些条件是否成立，比如判断指针类型的大小sizeof(void*)是否大于8,或者判断malloc返回的指针是否为null。 assert的函数申明如下： void assert( int expression ); 如果expression为0，即false，a</description>
+    </item>
+    
+    <item>
+      <title>内存乱序与C&#43;&#43;内存模型详解</title>
+      <link>https://www.huliujia.com/blog/f85f72a3b3e3018ffe9c9d3c15dda0f5db079859/</link>
+      <pubDate>Sun, 17 Jan 2021 09:02:25 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/f85f72a3b3e3018ffe9c9d3c15dda0f5db079859/</guid>
+      <description>内存乱序 内存乱序指的是内存操作出现乱序，CPU缓存、编译器优化、处理器指令优化等都会改变内存顺序，造成内存乱序。 学习内存顺序容易陷入了一个误区，因为内存顺序是和CPU架构、编译器息息相关的，想要去深入理解CPU缓存怎么导致内存乱序的，编译器优化和处理器指令</description>
+    </item>
+    
+    <item>
+      <title>聊一聊原子操作</title>
+      <link>https://www.huliujia.com/blog/df3c2e8a9ef77bd2ed0d83292778734eb395970c/</link>
+      <pubDate>Sat, 16 Jan 2021 20:23:27 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/df3c2e8a9ef77bd2ed0d83292778734eb395970c/</guid>
+      <description>先举个栗子 下面的C++代码编译执行后，v的输出是多少呢？每个线程都执行了10000次v++，总共2个线程，那么v的最终结果应该是20000，结果是这样吗？ #include &amp;lt;iostream&amp;gt; // std::cout #include &amp;lt;thread&amp;gt; // std::thread int v = 0; void plus() { for(int i=0; i&amp;lt;10000; i++) { ++v; } } int main() { std::thread t1(plus); std::thread t2(plus); t1.join(); t2.join(); std::cout &amp;lt;&amp;lt; &amp;quot;v: &amp;quot; &amp;lt;&amp;lt; v &amp;lt;&amp;lt; std::endl; } //编译执行指令：g</description>
+    </item>
+    
+    <item>
+      <title>简易编译器实现（二）使用Bison创建语法分析器</title>
+      <link>https://www.huliujia.com/blog/e50b11b118cb08067469fa9c8af90aad3aa2f02e/</link>
+      <pubDate>Thu, 17 Sep 2020 09:20:27 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/e50b11b118cb08067469fa9c8af90aad3aa2f02e/</guid>
+      <description>简易编译器实现（一）使用Flex创建词法分析器一文介绍了编译器的概念和七个阶段，并说明了如何使用Flex创建词法分析器。本篇文章介绍如何使用Bison创建语法分析器，并实现基本的运算能力。本文继续使用简易编译器实现（一）使用Flex创建词法分析器中提出的集</description>
+    </item>
+    
+    <item>
+      <title>简易编译器实现（一）使用Flex创建词法分析器</title>
+      <link>https://www.huliujia.com/blog/7bdf23e1aadefa13286b73c3aa4063a5836b1a37/</link>
+      <pubDate>Tue, 15 Sep 2020 08:30:03 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7bdf23e1aadefa13286b73c3aa4063a5836b1a37/</guid>
+      <description>编译器简介 编程语言是人和计算机交流的媒介，但是计算机只能理解二进制语言，编译器的工作就是把人可以理解的编程语言翻译成机器可以理解的二进制语言，即可执行文件。 编译过程可以细分为7个阶段 词法分析 语法分析 语义分析 中间代码生成 机器无关的代码优化 代码生成 机器相关的代</description>
+    </item>
+    
+    <item>
+      <title>内联函数(inline Function)浅析</title>
+      <link>https://www.huliujia.com/blog/4e4824434d272ec7be2bcf85c04cb2e57be3690e/</link>
+      <pubDate>Thu, 27 Aug 2020 10:05:52 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/4e4824434d272ec7be2bcf85c04cb2e57be3690e/</guid>
+      <description>什么是内联函数 内联函数(inline function)是C和C++都支持的一种语言特性，简单来说，就是在编译阶段在调用内联函数的地方直接展开函数代码，避免函数调用的开销。 内联函数的优点 内联函数的主要作用是避免函数调用开销，那就必须要讨论一下函数调用有哪些开</description>
+    </item>
+    
+    <item>
+      <title>学习笔记：相似度度量与协同过滤</title>
+      <link>https://www.huliujia.com/blog/7255c95b81e55827c1b8e6cbf24f2f760c978e06/</link>
+      <pubDate>Sat, 14 Mar 2020 22:01:26 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7255c95b81e55827c1b8e6cbf24f2f760c978e06/</guid>
+      <description>相似度度量 相似度度量关注的是两个对象是否相似，相似程度是多少？比如两张图片、两篇文章、两句话、两个人的喜好的相抵程度等。 为了度量相似度，首先需要将比较对象转换成实数向量，这样计算机才能够理解。对象类型不同，转换方式也不同，最终目的都是将比较对象转换成实数向</description>
+    </item>
+    
+    <item>
+      <title>学习笔记：信息熵与决策树</title>
+      <link>https://www.huliujia.com/blog/ebab9bd78f525f25a01ef64345f279977c78a75f/</link>
+      <pubDate>Mon, 09 Mar 2020 23:03:40 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/ebab9bd78f525f25a01ef64345f279977c78a75f/</guid>
+      <description>信息熵 什么是信息熵 信息熵用于度量”预测随机变量Y的取值“的难度。信息熵越大说明Y的取值的不确定性越大，即预测难度越大。本文用H(Y)表示预测Y值的信息熵。 下表为两只球队的虚拟的胜、负、平历史记录，显然预测恒大比赛结果的难度要远小于绿城。因为恒大90%都是胜</description>
+    </item>
+    
+    <item>
+      <title>[译] Linux定时任务工具crontab入门教程</title>
+      <link>https://www.huliujia.com/blog/69c52d7badd64f2cd86765a3a8fee88b5cfaa13b/</link>
+      <pubDate>Sat, 07 Mar 2020 12:43:37 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/69c52d7badd64f2cd86765a3a8fee88b5cfaa13b/</guid>
+      <description>crontab是类Unix系统最好用的工具之一，用来设置定时任务，这些定时任务也被称为“Cron Jobs”。Cron通常被用于运行定时备份、监控磁盘使用情况、定期删除不需要的文件（比如日志文件）、运行系统维护任务等。本文主要介绍crontab的基础使用，基</description>
+    </item>
+    
+    <item>
+      <title>Pyhon&#43;lxml&#43;xpath快速实现网页爬虫（比BeautifulSoup好用）</title>
+      <link>https://www.huliujia.com/blog/70f98f7c0ea538497afde194f6af34ea4cee3738/</link>
+      <pubDate>Thu, 26 Sep 2019 23:41:47 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/70f98f7c0ea538497afde194f6af34ea4cee3738/</guid>
+      <description>背景 最近因为工作需要写爬虫，以前用过BeautifulSoup，所以很自然的无脑上BeautifulSoup了，不过使用过程中发现BeautifulSoup有一个致命的缺陷，就是不能支持XPath。XPath可以快速在结构化的文档（如XML，HTML）中查</description>
+    </item>
+    
+    <item>
+      <title>使用lxml.etree解析中文网页时出现乱码问题的解决办法</title>
+      <link>https://www.huliujia.com/blog/7ed51f3056b97ed75a998eee93082bb957756ccd/</link>
+      <pubDate>Mon, 23 Sep 2019 23:38:19 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7ed51f3056b97ed75a998eee93082bb957756ccd/</guid>
+      <description>吐槽 不得不说网络这个东西害死人，一群只会复制粘贴的瓜皮儿。 没一点有用的答案，还要写的像模像样装x 这个问题折腾了一个晚上，晚上找了各种方案，都是相互抄，然而都不能解决问题，找的过程中看到一个博主发出了这样的感慨，真的深表赞同啊，鱼目混杂的内容太多了。 lxml.etree.tostring 乱码的</description>
+    </item>
+    
+    <item>
+      <title>版本控制：Git与Svn的命令对应关系</title>
+      <link>https://www.huliujia.com/blog/802a64152bbbe877c95c84ef2fdf3857a056b536/</link>
+      <pubDate>Tue, 20 Aug 2019 23:19:09 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/802a64152bbbe877c95c84ef2fdf3857a056b536/</guid>
+      <description>导言 作为一个只用过git的童鞋，因为工作需要遇见了svn。初次见面时还很羞涩，经过了一段时间的交往，我们之间的关系突飞猛进，也成功地收到了svn的“好人卡”（这是个悲伤的故事）。所以为了让和我一样的svn新童鞋能够快速收获好人卡，整理了一下git和svn各</description>
+    </item>
+    
+    <item>
+      <title>云服务器&#43;Github Pages双节点托管解决博客访问速度和百度收录问题</title>
+      <link>https://www.huliujia.com/blog/29265e5a1e69e0794a9f1acd59ae94489cf38bb4/</link>
+      <pubDate>Sat, 04 May 2019 22:11:53 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/29265e5a1e69e0794a9f1acd59ae94489cf38bb4/</guid>
+      <description>Github Pages + Hugo 搭建静态博客介绍了如何使用Github Pages托管静态网站。 使用双仓库+多路解析解决Github Pages无法被百度搜索收录的问题介绍了如何使用Coding Pages和Github Pages双仓库托管静态网站。 使用云服务器+Nginx配置静态We</description>
+    </item>
+    
+    <item>
+      <title>使用云服务器&#43;Nginx搭建静态Web服务器</title>
+      <link>https://www.huliujia.com/blog/4ee3f047a0c262c0b9b3566700676c54cdf6a30d/</link>
+      <pubDate>Fri, 03 May 2019 21:44:50 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/4ee3f047a0c262c0b9b3566700676c54cdf6a30d/</guid>
+      <description>这篇文章介绍如何使用Nginx搭建静态Web服务器（比如静态博客），并实现HTTPS访问（可选）以及Github Pages双节点托管（可选）。Nginx是一款轻量级Web服务器，也可以用作反向代理，负载平衡器 和 HTTP缓存。 域名和云服务器准备 本文假定你已经</description>
+    </item>
+    
+    <item>
+      <title>Linux/MacOS批量删除文件中的^M符号</title>
+      <link>https://www.huliujia.com/blog/003841a593bc4a2741d273eb8f98e872af6cb63a/</link>
+      <pubDate>Fri, 15 Mar 2019 15:39:15 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/003841a593bc4a2741d273eb8f98e872af6cb63a/</guid>
+      <description>在Windows系统下编辑过的文本文件通常都会在行尾留下&amp;rdquo;^M&amp;rdquo;符号，在Linux下使用 cat -v filename 可以查看文件中的^M符号。 多出的^M符号是由于Windows/DOS中换行使用的是\r\n两个字符，\r是回车（carriage），\n是</description>
+    </item>
+    
+    <item>
+      <title>VSCode查找和替换正则表达式转义字符整理</title>
+      <link>https://www.huliujia.com/blog/a2c7dc8ec28aa650df1ff43c580785decdeba8bc/</link>
+      <pubDate>Sat, 09 Mar 2019 10:20:12 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/a2c7dc8ec28aa650df1ff43c580785decdeba8bc/</guid>
+      <description>使用VSCode进行查找、替换时，经常需要用到正则表达式，一段时间不用就忘了，每次要用的时候都要耽误很多时间去查找，所以整理了一份很全的放在这里。这个其实是.NET使用的正则表达式，VSCode也是一样的，微软系的产品（比如Visual Studio等）应该</description>
+    </item>
+    
+    <item>
+      <title>使用双仓库&#43;多路解析解决Github Pages无法被百度搜索收录的问题</title>
+      <link>https://www.huliujia.com/blog/7d8b8a8b346ec437171b8ceca0c4fd708af4b702/</link>
+      <pubDate>Thu, 28 Feb 2019 09:01:59 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7d8b8a8b346ec437171b8ceca0c4fd708af4b702/</guid>
+      <description>背景介绍 在Github Pages + Hugo 搭建静态博客一文中，介绍了如何使用Github pages搭建个人博客。搭建博客后发现Google已经收录了，但是百度却迟迟没有收录，使用百度的“搜索资源平台-抓取诊断”功能对网站进行抓取测试发现抓取失败了，结果为403 Forbi</description>
+    </item>
+    
+    <item>
+      <title>Github Pages &#43; Hugo 搭建静态博客</title>
+      <link>https://www.huliujia.com/blog/7dab9c2ab6132aaa3fe0da2f7f9fe3264bdd8d75/</link>
+      <pubDate>Sat, 23 Feb 2019 16:58:23 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7dab9c2ab6132aaa3fe0da2f7f9fe3264bdd8d75/</guid>
+      <description>前景提要 阮一峰总结了喜欢写Blog的人，会经历三个阶段。 第一阶段，刚接触Blog，觉得很新鲜，试着选择一个免费空间来写。 第二阶段，发现免费空间限制太多，就自己购买域名和空间，搭建独立博客。 第三阶段，觉得独立博客的管理太麻烦，最好在保留控制权的前提下，让别人</description>
+    </item>
+    
+    <item>
+      <title>点对点最短路径算法：Floyd Warshall算法</title>
+      <link>https://www.huliujia.com/blog/82ee513b870106e5e7b3cff44579e3ee266b2e3e/</link>
+      <pubDate>Sat, 19 Jan 2019 19:40:08 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/82ee513b870106e5e7b3cff44579e3ee266b2e3e/</guid>
+      <description>背景知识 图简介 图由节点和边组成，边有方向的图称为有向图，边没有方向的图称为无向图，最短路径算法里可以把无向图视为双向连接的有向图。 边有权重的图称为有权图，边没有权重的图称为无权图，无权图可以视为边的权重均为1的图。 点对点最短路径 求图中任意（所有）两点之间的</description>
+    </item>
+    
+    <item>
+      <title>Docker基础使用</title>
+      <link>https://www.huliujia.com/blog/35072064cbab14191af21d31fb73f27a4be1c5d5/</link>
+      <pubDate>Fri, 30 Nov 2018 22:48:29 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/35072064cbab14191af21d31fb73f27a4be1c5d5/</guid>
+      <description>本文使用的运行环境 Ubuntu 16.04.5 LTS 全新安装Docker 参考：https://docs.docker.com/install/linux/docker-ce/ubuntu/ 安装依赖包 sudo apt-get update sudo apt-get install apt-transport-https ca-certificates curl software-properties-common 添加Docker的官方GPG key curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - 设置stable仓库</description>
+    </item>
+    
+    <item>
+      <title>使用iconv对文件批量转码</title>
+      <link>https://www.huliujia.com/blog/7fc896e6b3af6549919994ab59d5cbe549f805ce/</link>
+      <pubDate>Mon, 12 Nov 2018 22:33:03 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7fc896e6b3af6549919994ab59d5cbe549f805ce/</guid>
+      <description>Windows下中文使用的编码一般默认为GB18030，git无法识别里面的中文，在Linux和Mac上打开会出现乱码问题 使用file命令可以查看文件编码 #hello.cpp为文件名 file hello.cpp iconv可以对单个文件进行转码,使用方式如下： 显示支持的编码 iconv -l 将G</description>
+    </item>
+    
+    <item>
+      <title>书签 of 技术文章</title>
+      <link>https://www.huliujia.com/blog/b09f78d4212f3007cbba0af93e0c34b4cf3d3180/</link>
+      <pubDate>Thu, 02 Aug 2018 22:57:45 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/b09f78d4212f3007cbba0af93e0c34b4cf3d3180/</guid>
+      <description>HDFS Hadoop核心之HDFS 架构设计 Hbase HBase and MapR-DB: Designed for Distribution, Scale, and Speed An In-Depth Look at the HBase Architecture IBM：HBase 深入浅出 Yarn IBM: YARN 简介 Yarn 架构 Hadoop MapReduce Hadoop MapReduce 的map、reduce分别是什么意思 Spark Cloudera: Apache Spark Resource Management and YARN App Models Spark中foreachPartition和mapPartitions的区别 Git</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（十一）内核同步方法（自旋锁，信号量，互斥锁，完成变量，顺序锁，禁止抢占）</title>
+      <link>https://www.huliujia.com/blog/148dbabde2804f33fc69c42699a84637082c5d78/</link>
+      <pubDate>Sat, 09 Jun 2018 11:23:37 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/148dbabde2804f33fc69c42699a84637082c5d78/</guid>
+      <description>原子操作 Linux内核提供了多种同步机制，这些机制本质上都是通过原子操作来实现的。原子操作可以保证指令以原子方式执行，不会被中途打断（中断也不会打断一个指令，处理器只有在当前指令完成后才会去处理中断）。内核提供了两套原子操作的接口，一套用于整数原子操作，一</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（十）中断处理的下半部（Bottom Halve）</title>
+      <link>https://www.huliujia.com/blog/1553798b9dd8620c2fb8839ea0fda9cb2490d83d/</link>
+      <pubDate>Wed, 06 Jun 2018 11:23:25 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/1553798b9dd8620c2fb8839ea0fda9cb2490d83d/</guid>
+      <description>为什么需要下半部 中断处理程序有如下局限性： 中断处理程序是异步中断，被其中断执行的代码（包括别的中断处理程序）可能正在执行非常重要的任务，为了避免被中断进程停止过长时间，中断处理程序的执行应该越快越好。 中断处理程序会禁用其服务的中断线（没有设置IRQF_DI</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（九）中断和中断处理程序</title>
+      <link>https://www.huliujia.com/blog/98ea487478d486083017bc1c0ff0727851cfe096/</link>
+      <pubDate>Mon, 04 Jun 2018 11:23:18 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/98ea487478d486083017bc1c0ff0727851cfe096/</guid>
+      <description>中断 为了对计算机的硬件（键盘，硬盘，鼠标，网卡等）进行管理，内核需要和这些硬件通信。一种方式是使用轮训（polling）的方式，这种方式周期性地查看所有硬件设备的状态并做相应处理，这会造成很多不必要的系统开销。Linux内核使用中断的方式来管理硬件设备，中</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（八）Page Cache与Page回写</title>
+      <link>https://www.huliujia.com/blog/6d9091df3638fb9f6cea7867d7dd2e8281435b8c/</link>
+      <pubDate>Sat, 02 Jun 2018 09:11:07 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/6d9091df3638fb9f6cea7867d7dd2e8281435b8c/</guid>
+      <description>综述 Page cache是通过将磁盘中的数据缓存到内存中，从而减少磁盘I/O操作，从而提高性能。此外，还要确保在page cache中的数据更改时能够被同步到磁盘上，后者被称为page回写（page writeback）。一个inode对应一个page cache对象，</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（七）系统调用</title>
+      <link>https://www.huliujia.com/blog/4645655cea5d5b6ecb20280536cd86e547421eeb/</link>
+      <pubDate>Wed, 30 May 2018 09:06:54 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/4645655cea5d5b6ecb20280536cd86e547421eeb/</guid>
+      <description>综述 用户空间进程通过内核提供的一套接口和系统进行交互，这些接口让用户空间进程能够受控地访问系统资源、创建新的进程以及和其他进程通信等。受控表示用户进程不能不受限制地做任何想做的事情，这对保证系统的稳定非常关键。在Linux系统中，系统调用是除了except</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（六）进程调度</title>
+      <link>https://www.huliujia.com/blog/3fbf8bbcd3d7fe167ceefd76538053515946babd/</link>
+      <pubDate>Tue, 29 May 2018 22:26:47 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/3fbf8bbcd3d7fe167ceefd76538053515946babd/</guid>
+      <description>综述 内核调度子系统负责进程调度，调度程序决定让哪个进程运行、什么时候运行、运行多久。调度程序的目标有两个：一个是最大化系统资源的利用率，一个是减少和用户的交互延迟，让用户觉得多个进程在同时运行。这两个目标是冲突的，需要做trade-off。 多任务操作系统 多</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（五）进程地址空间</title>
+      <link>https://www.huliujia.com/blog/9c6895a796464a3bac7fba4b17f76e1ae03d2ab4/</link>
+      <pubDate>Thu, 10 May 2018 22:23:24 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/9c6895a796464a3bac7fba4b17f76e1ae03d2ab4/</guid>
+      <description>进程地址空间简介 Linux是一个虚拟内存操作系统，系统中的所有进程以虚拟方式共享内存。从进程的视角来看，它独占系统中所有的物理内存，并且一个进程的地址空间可以远远大于物理内存的大小。 进程的地址空间由可寻址的虚拟内存组成，进程通过地址空间中的虚拟地址访问内存</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（四）进程管理</title>
+      <link>https://www.huliujia.com/blog/23e0a634f0ac72e53813ffbd8a042fbebff97041/</link>
+      <pubDate>Wed, 09 May 2018 22:16:04 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/23e0a634f0ac72e53813ffbd8a042fbebff97041/</guid>
+      <description>进程简介 进程（Process）是Unix操作系统最基本的抽象概念之一。进程是正在执行的程序，同时也是操作系统进行资源管理的最小单位，进程需要管理打开的文件、挂起的信号、内核内部数据、处理器状态等。 线程（Thread）是进程中正在执行的程序片段，是操作系统进</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（三）Block I/O层</title>
+      <link>https://www.huliujia.com/blog/b332e9cef68c8d3efe84778931ffb98a6173812d/</link>
+      <pubDate>Fri, 27 Apr 2018 22:11:59 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/b332e9cef68c8d3efe84778931ffb98a6173812d/</guid>
+      <description>块设备（Block Device）简介 块设备是一种以块（block）为单位可以进行随机存取的硬件设备。常见的块设备有硬盘，软盘，闪存等。 块设备的最小寻址单元是扇区（sector），一个扇区是2\^n个字节，512Bytes是最常见的扇区大小。内核的文件系统使</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（二）内存管理</title>
+      <link>https://www.huliujia.com/blog/0b652a8747751273cc34800581e12835351e5ae1/</link>
+      <pubDate>Tue, 24 Apr 2018 09:10:59 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/0b652a8747751273cc34800581e12835351e5ae1/</guid>
+      <description>综述 本文首先介绍和内存管理相关的一些概念如page，zone，然后介绍多种获得内存的方式，最后介绍Linux的slab层（slab分配器）。 页（page） 页是Linux内核进行内存管理的基本单元。MMU和虚拟内存也都使用页作为基本管理单元。不同的架构有不同</description>
+    </item>
+    
+    <item>
+      <title>Linux内核学习笔记（一）虚拟文件系统（VFS）</title>
+      <link>https://www.huliujia.com/blog/81d31574c9a0088e8ae0c304020b4b1c4f6b8fb9/</link>
+      <pubDate>Fri, 20 Apr 2018 15:40:05 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/81d31574c9a0088e8ae0c304020b4b1c4f6b8fb9/</guid>
+      <description>什么是VFS Vritual Filesystem 是给用户空间程序提供统一的文件和文件系统访问接口的内核子系统。借助VFS，即使文件系统的类型不同（比如NTFS和ext3），也可以实现文件系统之间交互（移动、复制文件等）， 从用户空间程序的角度来看，VFS提供了一个统一的抽象、接口。这使得用</description>
+    </item>
+    
+    <item>
+      <title>VFS中的数据结构（superblock、dentry、inode、file）</title>
+      <link>https://www.huliujia.com/blog/bff01fecc6e590d3ff7101c34f4b3c8889272751/</link>
+      <pubDate>Sat, 14 Apr 2018 12:46:53 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/bff01fecc6e590d3ff7101c34f4b3c8889272751/</guid>
+      <description>VFS简介 VFS的理念是使用统一的数据结构在内核中保存不同类型文件系统的信息（含操作）。 VFS是一个介于用户程序和文件系统实现之间的一个抽象层，VFS既给了不同类型的文件系统支持Linux系统的公共接口，也给用户程序提供了一个统一的调用接口。 VFS背后的核</description>
+    </item>
+    
+    <item>
+      <title>《C和C&#43;&#43;程序员面试秘笈》中存在的错误</title>
+      <link>https://www.huliujia.com/blog/8a209e5005fd17ec570ced231e48fa4165fde3b7/</link>
+      <pubDate>Wed, 11 Apr 2018 19:27:41 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/8a209e5005fd17ec570ced231e48fa4165fde3b7/</guid>
+      <description>最近在复习C++面试的考点，所以购买了《C和C++程序员面试秘笈》这本书（人民邮电出版社2014.3 ISBN：978-7-115-34113-6）。 书整体上是非常不错的，知识点覆盖比较全面，很符合我的需求。美中不足的是书中的错误有点多。阅读的过程中自己做了</description>
+    </item>
+    
+    <item>
+      <title>Linux进程状态码总结</title>
+      <link>https://www.huliujia.com/blog/f70756be368904eb2e2c463671d67fd5d0dd0b72/</link>
+      <pubDate>Fri, 06 Apr 2018 18:46:02 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/f70756be368904eb2e2c463671d67fd5d0dd0b72/</guid>
+      <description>在Linux中执行ps aux命令时，STAT列表示的是进程的状态。最近研究了一下进程状态码，这里做一个简单的总结。 下面是是ps的manual中给出的信息，本文将分别介绍每个状态 PROCESS STATE CODES Here are the different values that the s, stat and state output specifiers (header &amp;quot;STAT&amp;quot; or &amp;quot;S&amp;quot;) will display to describe the state of a process: D uninterruptible sleep (usually IO) R running or runnable (on run</description>
+    </item>
+    
+    <item>
+      <title>最小生成树(MST)：Prim算法与Kruskal算法</title>
+      <link>https://www.huliujia.com/blog/dab47d7b495f721c94db0959b69585abd0016a49/</link>
+      <pubDate>Thu, 29 Mar 2018 19:19:49 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/dab47d7b495f721c94db0959b69585abd0016a49/</guid>
+      <description>什么是最小生成树 最小生成树是一副连通加权无向图中一棵权值最小的生成树[维基百科] 常见的应用例子有铺设道路连接所有城市、铺设管道等，目标都是使总长度最短。 求解最小生成树的基本原理 Prim算法和Kruskal算法是求解最小生成树的两种经典算法，这两个算法都是贪</description>
+    </item>
+    
+    <item>
+      <title>二叉树的遍历（先序遍历，中序遍历，后序遍历，层次遍历）</title>
+      <link>https://www.huliujia.com/blog/e06651c8dbbb668c7476bd922f78127a72f7eec3/</link>
+      <pubDate>Mon, 29 Jan 2018 08:50:20 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/e06651c8dbbb668c7476bd922f78127a72f7eec3/</guid>
+      <description>二叉树简介 维基百科对二叉树的定义：二叉树（英语：Binary tree）是每个节点最多只有两个分支(不存在分支度大于2的节点)的树结构。通常分支被称作“左子树”和“右子树”。二叉树的分支具有左右次序，不能颠倒。 二叉树的遍历有4种方式，先序遍历，中序遍历，后序</description>
+    </item>
+    
+    <item>
+      <title>Trie，单词查找树</title>
+      <link>https://www.huliujia.com/blog/4c5cd4dd260a03535d12579195dfaf17e57c3b43/</link>
+      <pubDate>Sat, 27 Jan 2018 09:01:43 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/4c5cd4dd260a03535d12579195dfaf17e57c3b43/</guid>
+      <description>Trie简介 Trie，又称前缀树或字典树，是一种有序树，用于保存关联数组，其中的键通常是字符串。与二叉查找树不同，键不是直接保存在节点中，而是由节点在树中的位置决定。一个节点的所有子孙都有相同的前缀，也就是这个节点对应的字符串，而根节点对应空字符串。一般情</description>
+    </item>
+    
+    <item>
+      <title>九种经典排序算法详解（冒泡排序，插入排序，选择排序，快速排序，归并排序，堆排序，计数排序，桶排序，基数排序）</title>
+      <link>https://www.huliujia.com/blog/106f46450aa7b6df2859bc6cf72355cfdf2d915e/</link>
+      <pubDate>Fri, 26 Jan 2018 15:38:45 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/106f46450aa7b6df2859bc6cf72355cfdf2d915e/</guid>
+      <description>综述 最近复习了各种排序算法，记录了一下学习总结和心得，希望对大家能有所帮助。本文介绍了冒泡排序、插入排序、选择排序、快速排序、归并排序、堆排序、计数排序、桶排序、基数排序9种经典的排序算法。针对每种排序算法分析了算法的主要思路，每个算法都附上了伪代码和C+</description>
+    </item>
+    
+    <item>
+      <title>单源点最短路径算法：Dijkstra算法</title>
+      <link>https://www.huliujia.com/blog/e7ccfcbb1aefac5e938085dd930ff6fed9bc2a2d/</link>
+      <pubDate>Fri, 19 Jan 2018 11:36:24 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/e7ccfcbb1aefac5e938085dd930ff6fed9bc2a2d/</guid>
+      <description>背景知识 图简介 图由节点和边组成，边有方向的图称为有向图，边没有方向的图称为无向图，最短路径算法里可以把无向图视为双向连接的有向图。 边有权重的图称为有权图，边没有权重的图称为无权图，无权图可以视为边的权重均为1的图。 单源点最短路径 给定图中的一个节点，求该节点</description>
+    </item>
+    
+    <item>
+      <title>单源点最短路径算法：Bellman Ford算法</title>
+      <link>https://www.huliujia.com/blog/635c265b38c9b4fa17e79d33fa6b24a84544513f/</link>
+      <pubDate>Fri, 19 Jan 2018 11:26:32 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/635c265b38c9b4fa17e79d33fa6b24a84544513f/</guid>
+      <description>背景知识 图简介 图由节点和边组成，边有方向的图称为有向图，边没有方向的图称为无向图，最短路径算法里可以把无向图视为双向连接的有向图。 边有权重的图称为有权图，边没有权重的图称为无权图，无权图可以视为边的权重均为1的图。 单源点最短路径 给定图中的一个节点，求该节点</description>
+    </item>
+    
+  </channel>
+</rss>

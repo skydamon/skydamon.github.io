@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>assert on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/assert/</link>
+    <description>Recent content in assert on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 30 Jan 2021 11:20:23 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/assert/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>C/C&#43;&#43;中的断言(assert与static_assert)</title>
+      <link>https://www.huliujia.com/blog/f453c2a517ce997074a145325aef93abf2d91a67/</link>
+      <pubDate>Sat, 30 Jan 2021 11:20:23 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/f453c2a517ce997074a145325aef93abf2d91a67/</guid>
+      <description>assert简介 assert被C/C++用来判断某些条件是否成立，比如判断指针类型的大小sizeof(void*)是否大于8,或者判断malloc返回的指针是否为null。 assert的函数申明如下： void assert( int expression ); 如果expression为0，即false，a</description>
+    </item>
+    
+  </channel>
+</rss>

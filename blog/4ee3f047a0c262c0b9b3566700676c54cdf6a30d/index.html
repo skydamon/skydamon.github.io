@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>使用云服务器&#43;Nginx搭建静态Web服务器 | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="使用云服务器&#43;Nginx搭建静态Web服务器 - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2019-05-03T21:44:50&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2019-05-03T21:44:50&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="使用云服务器&#43;Nginx搭建静态Web服务器">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/4ee3f047a0c262c0b9b3566700676c54cdf6a30d/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">使用云服务器&#43;Nginx搭建静态Web服务器</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2019年5月3日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B">教程</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<p>这篇文章介绍如何使用Nginx搭建静态Web服务器（比如静态博客），并实现HTTPS访问（可选）以及Github Pages双节点托管（可选）。Nginx是一款轻量级Web服务器，也可以用作反向代理，负载平衡器 和 HTTP缓存。</p>
+
+<h2 id="域名和云服务器准备">域名和云服务器准备</h2>
+
+<p>本文假定你已经拥有一个域名和云服务器实例，并且域名解析已经指向了你的云服务器IP地址。如果没有的话需要购买和注册。</p>
+
+<p>域名注册推荐腾讯云：<a href="https://cloud.tencent.com/redirect.php?redirect=10010&amp;cps_key=bc6914703aab4a39a230b8697c7299db">腾讯云-域名注册（原Dnspod，已被腾讯收购）</a>，博主的域名是在腾讯云注册的，非常稳定，价格也很便宜，免费提供SSL证书，后面开启HTTPS需要腾讯云的SSL证书。</p>
+
+<p>云服务器根据需求选择国外的或者国内的云服务器厂商，两者各有优势。</p>
+
+<table>
+<thead>
+<tr>
+<th align="left">云服务器厂商</th>
+<th align="left">国内访问速度</th>
+<th align="left">国外访问速度</th>
+<th align="left">是否需要备案</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td align="left">国内云服务器厂商</td>
+<td align="left">快</td>
+<td align="left">慢</td>
+<td align="left">是</td>
+</tr>
+
+<tr>
+<td align="left">国外云服务器厂商</td>
+<td align="left">慢</td>
+<td align="left">快</td>
+<td align="left">否</td>
+</tr>
+</tbody>
+</table>
+
+<p>如果网站主要是面向国内或者中文用户的话，建议选择国内云服务器，后面会讨论如何使用免费的方案解决国外访问速度慢的问题。</p>
+
+<p>国外云服务器推荐<strong>vultr</strong>：<a href="https://www.vultr.com/?ref=7353661">vultr-云服务器</a></p>
+
+<p>国内云服务器推荐<strong>腾讯云</strong>：<a href="https://cloud.tencent.com/redirect.php?redirect=1001&amp;cps_key=bc6914703aab4a39a230b8697c7299db&amp;from=console">腾讯云-云服务器</a></p>
+
+<p>完成域名注册和云服务器购买后，在域名解析设置里添加A类型记录将解析目标指向服务器的IP地址。</p>
+
+<p><strong>下面假定你注册的域名为 example.com，使用 www.example.com 作为网站的主域名，服务器IP地址为8.8.8.8。请替换为实际的域名和IP地址</strong></p>
+
+<h2 id="step-1-安装nginx">Step 1：安装Nginx</h2>
+
+<p>通过ssh登陆服务器，使用系统的包管理工具安装Nginx。</p>
+
+<p>如果是Ubuntu或者Debian系统，直接使用apt安装即可，命令如下</p>
+
+<pre><code class="language-bash">sudo apt-get update
+sudo apt-get install nginx
+</code></pre>
+
+<p>在浏览器中输入<a href="http://8.8.8.8">http://8.8.8.8</a> 可以看到Nginx欢迎页面，说明安装成功了，但是暂时还不能使用域名访问。</p>
+
+<h2 id="step-2-准备网站静态文件">Step 2：准备网站静态文件</h2>
+
+<p>在/var/www/目录下创建网站目录，建议使用域名作为目录名称，这个目录将存放网站静态文件。</p>
+
+<pre><code class="language-bash">sudo cd /var/wwww
+sudo mkdir wwww.example.com
+</code></pre>
+
+<p>如果你之前已经有网站了，进入你本地的网站目录，把网站静态文件复制到www.example.com目录下</p>
+
+<pre><code class="language-bash">sudo cd ~/website #~/website替换为实际的本地网站目录
+sudo scp -r * root@8.8.8.8:/var/www/www.example.com
+</code></pre>
+
+<p>如果没有网站，打开服务器上的网站目录，创建一个名为index.html的文件作为网站的首页</p>
+
+<pre><code class="language-bash">sudo cd www.example.com
+sudo echo &quot;Hello，我是一个刚出生的网站，现在还啥都没有&quot; &gt; index.html
+</code></pre>
+
+<p>也可以使用Hugo生成一个比较美观的静态网站，Hugo是一个流行的静态网站生成工具，具体用法参照<a href="https://gohugo.io/getting-started/quick-start/">Hugo入门教程</a>，这里可以先跳过这一步。</p>
+
+<h2 id="step-3-配置nginx">Step 3：配置Nginx</h2>
+
+<p>Nginx的配置文件在目录/etc/nginx下面。我们需要用到该目录下有两个子目录：</p>
+
+<ul>
+<li><strong>sites-available</strong>，存放所有可用的网站配置</li>
+<li><strong>sites-enabled</strong>，Nginx运行时读取该目录下的配置文件。该目录下的文件都是软连接，指向sites-available下的实际配置文件。只有在sites-enabled下有软连接的配置文件才会生效。</li>
+</ul>
+
+<p>下面将首先在sites-available目录下创建配置文件，使用域名www.example.com作为配置文件名称，然后在sites-enabled下创建一个指向该配置文件的软连接使其生效。为了避免配置文件冲突，需要将默认的default配置文件在sites-enabled下的软连接删除。</p>
+
+<h3 id="step-3-1-创建配置文件">Step 3.1 创建配置文件</h3>
+
+<pre><code class="language-bash">sudo cd /etc/nginx/sites-available
+sudo touch www.example.com
+</code></pre>
+
+<h3 id="step3-2-编辑配置文件">Step3.2 编辑配置文件</h3>
+
+<p>将下面的内容粘贴到配置文件中</p>
+
+<pre><code class="language-bash">server {
+  listen 80 default_server; 
+  listen [::]:80 default_server;
+
+  root /var/www/www.example.com; #替换为实际域名
+  index index.html;
+  server_name wwww.example.com; #替换为实际域名
+
+  location / {
+    try_files $uri $uri/ =404;
+  }
+}
+</code></pre>
+
+<p>上面的配置内容告诉Nginx如下内容：</p>
+
+<ul>
+<li>网站目录为 /var/www/www.example.com</li>
+<li>网站首页文件为 index.html</li>
+<li>响应且仅响应访问目标域名为 www.example.com 的请求，如果想让Nginx响应多个域名，比如想要同时使用二级域名 example.com，可以在server_name项添加多个域名，使用逗号隔开</li>
+</ul>
+
+<h3 id="step3-3-创建软连接">Step3.3 创建软连接</h3>
+
+<p>在sites-enabled目录下为配置文件创建软连接，使配置文件可以生效</p>
+
+<pre><code class="language-bash">sudo ln -s /etc/nginx/sites-available/www.example.com /etc/nginx/sites-enabled/www.example.com
+sudo rm default #default配置文件一定要删除，不然会冲突。
+</code></pre>
+
+<h3 id="step3-4-重启nginx使新配置生效">Step3.4 重启Nginx使新配置生效</h3>
+
+<pre><code class="language-bash">sudo systemctl restart nginx
+</code></pre>
+
+<h2 id="开启https-可选">开启HTTPS（可选）</h2>
+
+<p>HTTPS是一种安全通信的传输协议。HTTPS经由HTTP进行通信，但利用SSL/TLS来加密数据包。使用HTTPS可以增加网站的可信度，也可以提高网站在搜索引擎的权重。</p>
+
+<p>本阶段假设你已经申请了SSL证书，并且已经有了crt和key文件。如果没有的话，请前往域名注册商网站申请SSL证书，获得证书后，下载证书。腾讯云的证书里包括多种Web服务器的证书格式，我们只需要Nginx目录下的两个文件，两个文件分别为证书文件1_www.example.com_bundle.crt和私钥文件2_www.example.com.key</p>
+
+<p>在服务器的/etc/nginx目录下创建certs目录，将证书文件和私钥文件拷贝到certs目录下。</p>
+
+<p>修改配置文件 /etc/nginx/sites-available/www.example.com，将其修改为如下内容：</p>
+
+<pre><code class="language-bash">server {
+        listen 443 default_server;
+        listen [::]:443 default_server;
+
+        root /var/www/www.example.com;
+        index index.html;
+        server_name www.example.com;
+
+        location / {
+                try_files $uri $uri/ =404;
+        }
+
+
+        # SSL证书配置
+        ssl on;
+        ssl_certificate certs/1_www.example.com_bundle.crt;
+        ssl_certificate_key certs/2_www.example.com.key;
+        ssl_session_timeout 5m;
+        ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+        ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:HIGH:!aNULL:!MD5:!RC4:!DHE;
+        ssl_prefer_server_ciphers on;
+}
+
+## 将http请求重定向到https请求
+server {
+        listen 80;
+        listen [::]:80;
+        server_name www.example.com;
+        rewrite ^ https://$host$request_uri? permanent;
+}
+</code></pre>
+
+<p>这个配置文件分为两个serve块，第一个server块告诉Nginx如下内容：</p>
+
+<ul>
+<li>监听443端口（HTTPS协议端口），即响应HTTPS请求</li>
+<li>SSL证书文件为 certs/1_www.example.com_bundle.crt，私钥文件为certs/2_www.example.com.key</li>
+<li>网站目录为 /var/www/www.example.com</li>
+<li>网站首页文件为 index.html</li>
+<li>响应且仅响应访问目标域名为 www.example.com 的请求</li>
+</ul>
+
+<p>第二个server块告诉Nginx如下内容：</p>
+
+<ul>
+<li>监听80端口（HTTP协议端口），即响应HTTP请求</li>
+<li>响应且仅响应访问目标域名为 www.example.com 的请求</li>
+<li>将HTTP请求重定向为HTTPS请求</li>
+</ul>
+
+<p>如果没有第二个server块，服务器只能使用HTTPS协议（ <a href="https://www.example.com">https://www.example.com</a> ）访问，使用HTTP协议（ <a href="http://www.example.com">http://www.example.com</a> ）访问服务器会被拒绝。</p>
+
+<h2 id="参考文献">参考文献</h2>
+
+<ul>
+<li><a href="https://zh.wikipedia.org/wiki/%E8%B6%85%E6%96%87%E6%9C%AC%E4%BC%A0%E8%BE%93%E5%AE%89%E5%85%A8%E5%8D%8F%E8%AE%AE">https://zh.wikipedia.org/wiki/%E8%B6%85%E6%96%87%E6%9C%AC%E4%BC%A0%E8%BE%93%E5%AE%89%E5%85%A8%E5%8D%8F%E8%AE%AE</a></li>
+<li><a href="https://zh.wikipedia.org/wiki/Nginx">https://zh.wikipedia.org/wiki/Nginx</a></li>
+<li><a href="https://medium.com/@jgefroh/a-guide-to-using-nginx-for-static-websites-d96a9d034940">https://medium.com/@jgefroh/a-guide-to-using-nginx-for-static-websites-d96a9d034940</a></li>
+<li><a href="https://cloud.tencent.com/document/product/400/4143#2.-nginx-.E8.AF.81.E4.B9.A6.E9.83.A8.E7.BD.B2">https://cloud.tencent.com/document/product/400/4143#2.-nginx-.E8.AF.81.E4.B9.A6.E9.83.A8.E7.BD.B2</a></li>
+</ul>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/4ee3f047a0c262c0b9b3566700676c54cdf6a30d/">https://www.huliujia.com/blog/4ee3f047a0c262c0b9b3566700676c54cdf6a30d/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/7d8b8a8b346ec437171b8ceca0c4fd708af4b702/">使用双仓库&#43;多路解析解决Github Pages无法被百度搜索收录的问题</a></li>
+        
+        <li><a href="/blog/7dab9c2ab6132aaa3fe0da2f7f9fe3264bdd8d75/">Github Pages &#43; Hugo 搭建静态博客</a></li>
+        
+        <li><a href="/blog/003841a593bc4a2741d273eb8f98e872af6cb63a/">Linux/MacOS批量删除文件中的^M符号</a></li>
+        
+        <li><a href="/blog/a2c7dc8ec28aa650df1ff43c580785decdeba8bc/">VSCode查找和替换正则表达式转义字符整理</a></li>
+        
+        <li><a href="/about/">关于博主</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/nginx">Nginx</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8">云服务器</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99">静态网站</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

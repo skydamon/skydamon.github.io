@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>最小生成树 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/</link>
+    <description>Recent content in 最小生成树 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 29 Mar 2018 19:19:49 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>最小生成树(MST)：Prim算法与Kruskal算法</title>
+      <link>https://www.huliujia.com/blog/dab47d7b495f721c94db0959b69585abd0016a49/</link>
+      <pubDate>Thu, 29 Mar 2018 19:19:49 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/dab47d7b495f721c94db0959b69585abd0016a49/</guid>
+      <description>什么是最小生成树 最小生成树是一副连通加权无向图中一棵权值最小的生成树[维基百科] 常见的应用例子有铺设道路连接所有城市、铺设管道等，目标都是使总长度最短。 求解最小生成树的基本原理 Prim算法和Kruskal算法是求解最小生成树的两种经典算法，这两个算法都是贪</description>
+    </item>
+    
+  </channel>
+</rss>

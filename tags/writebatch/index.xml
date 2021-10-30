@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>WriteBatch on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/writebatch/</link>
+    <description>Recent content in WriteBatch on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Fri, 01 Oct 2021 12:08:07 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/writebatch/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>LevelDB源码解析(6) 写任务(WriterBatch)合并</title>
+      <link>https://www.huliujia.com/blog/cc155a0319/</link>
+      <pubDate>Fri, 01 Oct 2021 12:08:07 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/cc155a0319/</guid>
+      <description>背景 写任务合并是由函数BuildBatchGroup来完成的，BuildBatchGroup会把任务队列writers_中若干个Writer的数据合并到一起，从而减少磁盘写次数，提高写性能。虽然每次写入的时候是往Memtable里写，但是为了在故障发生时保</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(5) WriteBatch</title>
+      <link>https://www.huliujia.com/blog/3c240f2a7b/</link>
+      <pubDate>Sun, 18 Apr 2021 21:34:10 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/3c240f2a7b/</guid>
+      <description>简介 LevelDB的官方注释是这么介绍WriteBatch的： WriteBatch holds a collection of updates to apply atomically to a DB 如何保证原子性可能需要看完对WriteBatch的使用才能理清楚，这里只能确定一个WriteBatch对象可以包含多条更新记录（插入/删除），支持批量写入。 WriteBa</description>
+    </item>
+    
+  </channel>
+</rss>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Nginx on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/nginx/</link>
+    <description>Recent content in Nginx on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Fri, 03 May 2019 21:44:50 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/nginx/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>使用云服务器&#43;Nginx搭建静态Web服务器</title>
+      <link>https://www.huliujia.com/blog/4ee3f047a0c262c0b9b3566700676c54cdf6a30d/</link>
+      <pubDate>Fri, 03 May 2019 21:44:50 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/4ee3f047a0c262c0b9b3566700676c54cdf6a30d/</guid>
+      <description>这篇文章介绍如何使用Nginx搭建静态Web服务器（比如静态博客），并实现HTTPS访问（可选）以及Github Pages双节点托管（可选）。Nginx是一款轻量级Web服务器，也可以用作反向代理，负载平衡器 和 HTTP缓存。 域名和云服务器准备 本文假定你已经</description>
+    </item>
+    
+  </channel>
+</rss>

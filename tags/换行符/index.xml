@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>换行符 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/</link>
+    <description>Recent content in 换行符 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Fri, 15 Mar 2019 15:39:15 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Linux/MacOS批量删除文件中的^M符号</title>
+      <link>https://www.huliujia.com/blog/003841a593bc4a2741d273eb8f98e872af6cb63a/</link>
+      <pubDate>Fri, 15 Mar 2019 15:39:15 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/003841a593bc4a2741d273eb8f98e872af6cb63a/</guid>
+      <description>在Windows系统下编辑过的文本文件通常都会在行尾留下&amp;rdquo;^M&amp;rdquo;符号，在Linux下使用 cat -v filename 可以查看文件中的^M符号。 多出的^M符号是由于Windows/DOS中换行使用的是\r\n两个字符，\r是回车（carriage），\n是</description>
+    </item>
+    
+  </channel>
+</rss>

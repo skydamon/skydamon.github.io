@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>BeautifulSoup on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/beautifulsoup/</link>
+    <description>Recent content in BeautifulSoup on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 26 Sep 2019 23:41:47 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/beautifulsoup/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Pyhon&#43;lxml&#43;xpath快速实现网页爬虫（比BeautifulSoup好用）</title>
+      <link>https://www.huliujia.com/blog/70f98f7c0ea538497afde194f6af34ea4cee3738/</link>
+      <pubDate>Thu, 26 Sep 2019 23:41:47 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/70f98f7c0ea538497afde194f6af34ea4cee3738/</guid>
+      <description>背景 最近因为工作需要写爬虫，以前用过BeautifulSoup，所以很自然的无脑上BeautifulSoup了，不过使用过程中发现BeautifulSoup有一个致命的缺陷，就是不能支持XPath。XPath可以快速在结构化的文档（如XML，HTML）中查</description>
+    </item>
+    
+  </channel>
+</rss>

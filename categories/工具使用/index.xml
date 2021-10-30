@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>工具使用 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/</link>
+    <description>Recent content in 工具使用 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 07 Mar 2020 12:43:37 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>[译] Linux定时任务工具crontab入门教程</title>
+      <link>https://www.huliujia.com/blog/69c52d7badd64f2cd86765a3a8fee88b5cfaa13b/</link>
+      <pubDate>Sat, 07 Mar 2020 12:43:37 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/69c52d7badd64f2cd86765a3a8fee88b5cfaa13b/</guid>
+      <description>crontab是类Unix系统最好用的工具之一，用来设置定时任务，这些定时任务也被称为“Cron Jobs”。Cron通常被用于运行定时备份、监控磁盘使用情况、定期删除不需要的文件（比如日志文件）、运行系统维护任务等。本文主要介绍crontab的基础使用，基</description>
+    </item>
+    
+    <item>
+      <title>版本控制：Git与Svn的命令对应关系</title>
+      <link>https://www.huliujia.com/blog/802a64152bbbe877c95c84ef2fdf3857a056b536/</link>
+      <pubDate>Tue, 20 Aug 2019 23:19:09 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/802a64152bbbe877c95c84ef2fdf3857a056b536/</guid>
+      <description>导言 作为一个只用过git的童鞋，因为工作需要遇见了svn。初次见面时还很羞涩，经过了一段时间的交往，我们之间的关系突飞猛进，也成功地收到了svn的“好人卡”（这是个悲伤的故事）。所以为了让和我一样的svn新童鞋能够快速收获好人卡，整理了一下git和svn各</description>
+    </item>
+    
+    <item>
+      <title>VSCode查找和替换正则表达式转义字符整理</title>
+      <link>https://www.huliujia.com/blog/a2c7dc8ec28aa650df1ff43c580785decdeba8bc/</link>
+      <pubDate>Sat, 09 Mar 2019 10:20:12 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/a2c7dc8ec28aa650df1ff43c580785decdeba8bc/</guid>
+      <description>使用VSCode进行查找、替换时，经常需要用到正则表达式，一段时间不用就忘了，每次要用的时候都要耽误很多时间去查找，所以整理了一份很全的放在这里。这个其实是.NET使用的正则表达式，VSCode也是一样的，微软系的产品（比如Visual Studio等）应该</description>
+    </item>
+    
+    <item>
+      <title>Docker基础使用</title>
+      <link>https://www.huliujia.com/blog/35072064cbab14191af21d31fb73f27a4be1c5d5/</link>
+      <pubDate>Fri, 30 Nov 2018 22:48:29 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/35072064cbab14191af21d31fb73f27a4be1c5d5/</guid>
+      <description>本文使用的运行环境 Ubuntu 16.04.5 LTS 全新安装Docker 参考：https://docs.docker.com/install/linux/docker-ce/ubuntu/ 安装依赖包 sudo apt-get update sudo apt-get install apt-transport-https ca-certificates curl software-properties-common 添加Docker的官方GPG key curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add - 设置stable仓库</description>
+    </item>
+    
+    <item>
+      <title>使用iconv对文件批量转码</title>
+      <link>https://www.huliujia.com/blog/7fc896e6b3af6549919994ab59d5cbe549f805ce/</link>
+      <pubDate>Mon, 12 Nov 2018 22:33:03 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7fc896e6b3af6549919994ab59d5cbe549f805ce/</guid>
+      <description>Windows下中文使用的编码一般默认为GB18030，git无法识别里面的中文，在Linux和Mac上打开会出现乱码问题 使用file命令可以查看文件编码 #hello.cpp为文件名 file hello.cpp iconv可以对单个文件进行转码,使用方式如下： 显示支持的编码 iconv -l 将G</description>
+    </item>
+    
+  </channel>
+</rss>

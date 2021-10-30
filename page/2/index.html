@@ -66,11 +66,11 @@
                         <article class="post">
                             <header>
                                 <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite" >LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+                                    <a href="https://www.huliujia.com/blog/3c240f2a7b/" title="LevelDB源码解析(5) WriteBatch" >LevelDB源码解析(5) WriteBatch</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
-                                2021年10月30日
+                                2021年4月18日
                             </date>
                             
                             <div class="post-meta">
@@ -81,19 +81,19 @@
                             </div>
                             
                             <div class="post-content">
-                                背景 LevelDB每次写入key-value都是写入到内存中的Memtable中的，但是Memtable的空间不是无限的，Memtable写满后，就需要调用MakeRoomForWrite把Memtable转存为Immutable Memtable，并创建新……
+                                简介 LevelDB的官方注释是这么介绍WriteBatch的： WriteBatch holds a collection of updates to apply atomically to a DB 如何保证原子性可能需要看完对WriteBatch的使用才能理清楚，这里只能确定一个WriteBatch对象可以包含多条更新记录（插入/删除），支持批量写入。 WriteBa……
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/056e5fe63f/">阅读全文</a></p>
+                            <p class="readmore"><a href="https://www.huliujia.com/blog/3c240f2a7b/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
                                 <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程" >LevelDB源码解析(14) 写操作之Write主流程</a>
+                                    <a href="https://www.huliujia.com/blog/c5e8646cb4765da867b3936b2bae62843bded7e5/" title="LevelDB源码解析(4) MemTable" >LevelDB源码解析(4) MemTable</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
-                                2021年10月28日
+                                2021年4月11日
                             </date>
                             
                             <div class="post-meta">
@@ -104,19 +104,19 @@
                             </div>
                             
                             <div class="post-content">
-                                leveldb对外提供的写入接口是Put，Put的实现如下： Status DB::Put(const WriteOptions &amp;opt, const Slice &amp;key, const Slice &amp;value) { WriteBatch batch; batch.Put(key, value); return Write(opt, &amp;batch); } WriteBatch是一个比较简单的类，只有一个string类型的成员变量rep_。提供了插入、删除、遍历等操作，详细实现可以参考LevelDB源码解析(5)……
+                                简介 MemTable是LevelDB在内存中的缓存库。用户写入数据时，LevelDB会先把数据写入到MemTable中。如果MemTable写满了，就会新建一个MemTable进行写入。后台再异步把旧的MemTable压缩写到磁盘上。因为旧的MemTabl……
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/24af576aa3/">阅读全文</a></p>
+                            <p class="readmore"><a href="https://www.huliujia.com/blog/c5e8646cb4765da867b3936b2bae62843bded7e5/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
                                 <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并" >LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+                                    <a href="https://www.huliujia.com/blog/7c34da2c9a2d27bea2ec43f9a0401724bc48bffd/" title="LevelDB源码解析(3) 变长编码" >LevelDB源码解析(3) 变长编码</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
-                                2021年10月26日
+                                2021年4月4日
                             </date>
                             
                             <div class="post-meta">
@@ -127,19 +127,19 @@
                             </div>
                             
                             <div class="post-content">
-                                背景 LevelDB的名字中的Level表示文件是分层存储的，默认最多7层，每层有0到N个文件。除了L0层，每层内部的文件之间都是有序的(所谓Sorted String Table)，互斥的(相互之间的key范围没有重叠)。而L0层的文件都是从Memtable直接落盘的，……
+                                背景 LevelDB在内存中存储key、value时，最后是以单值形式存储到一个跳跃表中的，跳跃表我们在上一篇文章LevelDB源码解析之SkipList(跳跃表）聊过了。这里主要想谈一下，LevelDB是如何把key、value编码到一个单值里面的，顺带分……
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/4496bd928e/">阅读全文</a></p>
+                            <p class="readmore"><a href="https://www.huliujia.com/blog/7c34da2c9a2d27bea2ec43f9a0401724bc48bffd/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
                                 <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘" >LevelDB源码解析(12) Memtable落盘</a>
+                                    <a href="https://www.huliujia.com/blog/bcd8d4d2415144bf21c2e3fc695cf55510653264/" title="LevelDB源码解析(2) SkipList(跳跃表)" >LevelDB源码解析(2) SkipList(跳跃表)</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
-                                2021年10月6日
+                                2021年3月28日
                             </date>
                             
                             <div class="post-meta">
@@ -150,42 +150,42 @@
                             </div>
                             
                             <div class="post-content">
-                                背景 LevelDB源码解析(4) MemTable介绍了Memtable，LevelDB会先把key-value插入到MemTable中。如果MemTable写满了，就会新建一个MemTable进行写入。旧的Memtablex会落盘。一个Memtable会产……
+                                背景 SkipList是LevelDB的MemTable使用的底层存储结构，LevelDB实现了一个支持泛型的跳跃表。本文不会具体介绍跳跃表的数据结构，如果读者不了解跳跃表的原理、实现，可以先看一下跳跃表（Skiplist）从原理到实现 SkipList的对外……
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/124132a9b3/">阅读全文</a></p>
+                            <p class="readmore"><a href="https://www.huliujia.com/blog/bcd8d4d2415144bf21c2e3fc695cf55510653264/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
                                 <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构" >LevelDB源码解析(11) SST文件结构</a>
+                                    <a href="https://www.huliujia.com/blog/071730c4c3f23dbd8c6eaf0e524873206fcf56d3/" title="跳跃表（SkipList）从原理到实现" >跳跃表（SkipList）从原理到实现</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
-                                2021年10月5日
+                                2021年3月27日
                             </date>
                             
                             <div class="post-meta">
                                 <span>|</span>
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84">数据结构</a></span>
                                 
                             </div>
                             
                             <div class="post-content">
-                                背景 前面我们逐渐深入的介绍了LevelDB从插入key-value到落盘的整个过程，感兴趣的读者可以移步相关文章： LevelDB源码解析(4) MemTable LevelDB源码解析(5) WriteBatch LevelDB源码解析(6) 写任务(WriterBatch)合并 LevelDB源码……
+                                数组与链表 数组和链表是非常基础的两种数据结构，链表每次查找都需要从头结点开始线性遍历，时间复杂度是O(n)。而数组通过维护元素顺序可以使用二分查找，查找的时间复杂度是O(lg(n))。查找效率方面数组完胜链表。 但是由于数组插入或删除元素时必须要移动所有受影……
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/6974db6de9/">阅读全文</a></p>
+                            <p class="readmore"><a href="https://www.huliujia.com/blog/071730c4c3f23dbd8c6eaf0e524873206fcf56d3/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
                                 <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）" >LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+                                    <a href="https://www.huliujia.com/blog/e6640480282d9a4273dcf04cb98adc60c2961dd5/" title="LevelDB源码解析(1) Arena内存分配器" >LevelDB源码解析(1) Arena内存分配器</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
-                                2021年10月5日
+                                2021年3月9日
                             </date>
                             
                             <div class="post-meta">
@@ -196,101 +196,101 @@
                             </div>
                             
                             <div class="post-content">
-                                背景 在LevelDB源码解析(4) MemTable中我们介绍了Memtable，LevelDB会先把key-value插入到MemTable中。如果MemTable写满了，就会新建一个MemTable进行写入。旧的Memtable(也叫Immutable M……
+                                背景 LevelDB中需要频繁申请和释放内存，如果直接使用系统的new/delete或者malloc/free接口申请和释放内存，会产生大量内存碎片，进而拖累系统的性能表现。所以LevelDB实现了一个Area内存分配器来对内存进行管理，以保证性能。 Aren……
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/02ad8ac30a/">阅读全文</a></p>
+                            <p class="readmore"><a href="https://www.huliujia.com/blog/e6640480282d9a4273dcf04cb98adc60c2961dd5/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
                                 <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder" >LevelDB源码解析(9) FilterBlockBuilder</a>
+                                    <a href="https://www.huliujia.com/blog/f453c2a517ce997074a145325aef93abf2d91a67/" title="C/C&#43;&#43;中的断言(assert与static_assert)" >C/C&#43;&#43;中的断言(assert与static_assert)</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
-                                2021年10月4日
+                                2021年1月30日
                             </date>
                             
                             <div class="post-meta">
                                 <span>|</span>
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/c/c&#43;&#43;">C/C&#43;&#43;</a></span>
                                 
                             </div>
                             
                             <div class="post-content">
-                                背景 Filter block为SST中一个区块，filter block由多个filter组成，每个data block对应一个filter（但是一个filter可能对应多个data block）。LevelDB在进入data block中查找前会先检查filter，如果fi……
+                                assert简介 assert被C/C++用来判断某些条件是否成立，比如判断指针类型的大小sizeof(void*)是否大于8,或者判断malloc返回的指针是否为null。 assert的函数申明如下： void assert( int expression ); 如果expression为0，即false，a……
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/1a8dbd0991/">阅读全文</a></p>
+                            <p class="readmore"><a href="https://www.huliujia.com/blog/f453c2a517ce997074a145325aef93abf2d91a67/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
                                 <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder" >LevelDB源码解析(8) BlockBuilder</a>
+                                    <a href="https://www.huliujia.com/blog/f85f72a3b3e3018ffe9c9d3c15dda0f5db079859/" title="内存乱序与C&#43;&#43;内存模型详解" >内存乱序与C&#43;&#43;内存模型详解</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
-                                2021年10月4日
+                                2021年1月17日
                             </date>
                             
                             <div class="post-meta">
                                 <span>|</span>
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/c/c&#43;&#43;">C/C&#43;&#43;</a></span>
                                 
                             </div>
                             
                             <div class="post-content">
-                                背景 一个SST文件由5个区块组成，其中三个区块都是由BlockBuilder构建的，所以在讲SST文件的构建之前，先讲一下BlockBuilder。BlockBuilder接受一组key-value，将其序列化到buffer中，buffer的数据就是要写入……
+                                内存乱序 内存乱序指的是内存操作出现乱序，CPU缓存、编译器优化、处理器指令优化等都会改变内存顺序，造成内存乱序。 学习内存顺序容易陷入了一个误区，因为内存顺序是和CPU架构、编译器息息相关的，想要去深入理解CPU缓存怎么导致内存乱序的，编译器优化和处理器指令……
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/6a7ee0401f/">阅读全文</a></p>
+                            <p class="readmore"><a href="https://www.huliujia.com/blog/f85f72a3b3e3018ffe9c9d3c15dda0f5db079859/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
                                 <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)" >LevelDB源码解析(7) 预写日志(WAL)</a>
+                                    <a href="https://www.huliujia.com/blog/df3c2e8a9ef77bd2ed0d83292778734eb395970c/" title="聊一聊原子操作" >聊一聊原子操作</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
-                                2021年10月2日
+                                2021年1月16日
                             </date>
                             
                             <div class="post-meta">
                                 <span>|</span>
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/c/c&#43;&#43;">C/C&#43;&#43;</a></span>
                                 
                             </div>
                             
                             <div class="post-content">
-                                背景 LevelDB每次写key-value不会直接写到文件中，而是先暂存在Memtable中，Memtable写满后再写到文件中。如果发生故障(比如宕机)，保存在Memtable中的key-value就会全部丢失。所以为了保证数据的原子性和持久性，每次写k……
+                                先举个栗子 下面的C++代码编译执行后，v的输出是多少呢？每个线程都执行了10000次v++，总共2个线程，那么v的最终结果应该是20000，结果是这样吗？ #include &lt;iostream&gt; // std::cout #include &lt;thread&gt; // std::thread int v = 0; void plus() { for(int i=0; i&lt;10000; i++) { ++v; } } int main() { std::thread t1(plus); std::thread t2(plus); t1.join(); t2.join(); std::cout &lt;&lt; &quot;v: &quot; &lt;&lt; v &lt;&lt; std::endl; } //编译执行指令：g……
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/e8d980b551/">阅读全文</a></p>
+                            <p class="readmore"><a href="https://www.huliujia.com/blog/df3c2e8a9ef77bd2ed0d83292778734eb395970c/">阅读全文</a></p>
                         </article>
                     
                         <article class="post">
                             <header>
                                 <h1 class="post-title" id="homepage">
-                                    <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并" >LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+                                    <a href="https://www.huliujia.com/blog/e50b11b118cb08067469fa9c8af90aad3aa2f02e/" title="简易编译器实现（二）使用Bison创建语法分析器" >简易编译器实现（二）使用Bison创建语法分析器</a>
                                 </h1>
                             </header>
                             <date class="post-meta meta-date">
-                                2021年10月1日
+                                2020年9月17日
                             </date>
                             
                             <div class="post-meta">
                                 <span>|</span>
                                 
-                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B">教程</a></span>
                                 
                             </div>
                             
                             <div class="post-content">
-                                背景 写任务合并是由函数BuildBatchGroup来完成的，BuildBatchGroup会把任务队列writers_中若干个Writer的数据合并到一起，从而减少磁盘写次数，提高写性能。虽然每次写入的时候是往Memtable里写，但是为了在故障发生时保……
+                                简易编译器实现（一）使用Flex创建词法分析器一文介绍了编译器的概念和七个阶段，并说明了如何使用Flex创建词法分析器。本篇文章介绍如何使用Bison创建语法分析器，并实现基本的运算能力。本文继续使用简易编译器实现（一）使用Flex创建词法分析器中提出的集……
                             </div>
-                            <p class="readmore"><a href="https://www.huliujia.com/blog/cc155a0319/">阅读全文</a></p>
+                            <p class="readmore"><a href="https://www.huliujia.com/blog/e50b11b118cb08067469fa9c8af90aad3aa2f02e/">阅读全文</a></p>
                         </article>
                     
                     
@@ -299,13 +299,17 @@
 
 <ol class="page-navigator">
     
+    <li class="prev">
+        <a href="https://www.huliujia.com/">上一页</a>
+    </li>
+    
 
     
-    <li  class="current">
+    <li >
         <a href="https://www.huliujia.com/">1</a>
     </li>
     
-    <li >
+    <li  class="current">
         <a href="https://www.huliujia.com/page/2/">2</a>
     </li>
     
@@ -328,7 +332,7 @@
 
     
     <li class="next">
-        <a href="https://www.huliujia.com/page/2/">下一页</a>
+        <a href="https://www.huliujia.com/page/3/">下一页</a>
     </li>
     
 </ol>

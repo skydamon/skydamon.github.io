@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>正则表达式 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/</link>
+    <description>Recent content in 正则表达式 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 09 Mar 2019 10:20:12 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>VSCode查找和替换正则表达式转义字符整理</title>
+      <link>https://www.huliujia.com/blog/a2c7dc8ec28aa650df1ff43c580785decdeba8bc/</link>
+      <pubDate>Sat, 09 Mar 2019 10:20:12 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/a2c7dc8ec28aa650df1ff43c580785decdeba8bc/</guid>
+      <description>使用VSCode进行查找、替换时，经常需要用到正则表达式，一段时间不用就忘了，每次要用的时候都要耽误很多时间去查找，所以整理了一份很全的放在这里。这个其实是.NET使用的正则表达式，VSCode也是一样的，微软系的产品（比如Visual Studio等）应该</description>
+    </item>
+    
+  </channel>
+</rss>

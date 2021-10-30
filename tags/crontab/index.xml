@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>crontab on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/crontab/</link>
+    <description>Recent content in crontab on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 07 Mar 2020 12:43:37 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/crontab/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>[译] Linux定时任务工具crontab入门教程</title>
+      <link>https://www.huliujia.com/blog/69c52d7badd64f2cd86765a3a8fee88b5cfaa13b/</link>
+      <pubDate>Sat, 07 Mar 2020 12:43:37 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/69c52d7badd64f2cd86765a3a8fee88b5cfaa13b/</guid>
+      <description>crontab是类Unix系统最好用的工具之一，用来设置定时任务，这些定时任务也被称为“Cron Jobs”。Cron通常被用于运行定时备份、监控磁盘使用情况、定期删除不需要的文件（比如日志文件）、运行系统维护任务等。本文主要介绍crontab的基础使用，基</description>
+    </item>
+    
+  </channel>
+</rss>

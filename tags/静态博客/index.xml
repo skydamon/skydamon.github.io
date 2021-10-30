@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>静态博客 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/</link>
+    <description>Recent content in 静态博客 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 04 May 2019 22:11:53 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>云服务器&#43;Github Pages双节点托管解决博客访问速度和百度收录问题</title>
+      <link>https://www.huliujia.com/blog/29265e5a1e69e0794a9f1acd59ae94489cf38bb4/</link>
+      <pubDate>Sat, 04 May 2019 22:11:53 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/29265e5a1e69e0794a9f1acd59ae94489cf38bb4/</guid>
+      <description>Github Pages + Hugo 搭建静态博客介绍了如何使用Github Pages托管静态网站。 使用双仓库+多路解析解决Github Pages无法被百度搜索收录的问题介绍了如何使用Coding Pages和Github Pages双仓库托管静态网站。 使用云服务器+Nginx配置静态We</description>
+    </item>
+    
+    <item>
+      <title>使用双仓库&#43;多路解析解决Github Pages无法被百度搜索收录的问题</title>
+      <link>https://www.huliujia.com/blog/7d8b8a8b346ec437171b8ceca0c4fd708af4b702/</link>
+      <pubDate>Thu, 28 Feb 2019 09:01:59 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7d8b8a8b346ec437171b8ceca0c4fd708af4b702/</guid>
+      <description>背景介绍 在Github Pages + Hugo 搭建静态博客一文中，介绍了如何使用Github pages搭建个人博客。搭建博客后发现Google已经收录了，但是百度却迟迟没有收录，使用百度的“搜索资源平台-抓取诊断”功能对网站进行抓取测试发现抓取失败了，结果为403 Forbi</description>
+    </item>
+    
+    <item>
+      <title>Github Pages &#43; Hugo 搭建静态博客</title>
+      <link>https://www.huliujia.com/blog/7dab9c2ab6132aaa3fe0da2f7f9fe3264bdd8d75/</link>
+      <pubDate>Sat, 23 Feb 2019 16:58:23 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7dab9c2ab6132aaa3fe0da2f7f9fe3264bdd8d75/</guid>
+      <description>前景提要 阮一峰总结了喜欢写Blog的人，会经历三个阶段。 第一阶段，刚接触Blog，觉得很新鲜，试着选择一个免费空间来写。 第二阶段，发现免费空间限制太多，就自己购买域名和空间，搭建独立博客。 第三阶段，觉得独立博客的管理太麻烦，最好在保留控制权的前提下，让别人</description>
+    </item>
+    
+  </channel>
+</rss>

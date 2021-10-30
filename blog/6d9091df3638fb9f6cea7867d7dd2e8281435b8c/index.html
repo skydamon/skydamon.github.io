@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Linux内核学习笔记（八）Page Cache与Page回写 | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="Linux内核学习笔记（八）Page Cache与Page回写 - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2018-06-02T09:11:07&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2018-06-02T09:11:07&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="Linux内核学习笔记（八）Page Cache与Page回写">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/6d9091df3638fb9f6cea7867d7dd2e8281435b8c/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">Linux内核学习笔记（八）Page Cache与Page回写</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2018年6月2日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/linux">Linux</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h2 id="综述">综述</h2>
+
+<p>Page cache是通过将磁盘中的数据缓存到内存中，从而减少磁盘I/O操作，从而提高性能。此外，还要确保在page cache中的数据更改时能够被同步到磁盘上，后者被称为page回写（page writeback）。一个inode对应一个page cache对象，一个page cache对象包含多个物理page。</p>
+
+<p>对磁盘的数据进行缓存从而提高性能主要是基于两个因素：第一，磁盘访问的速度比内存慢好几个数量级（毫秒和纳秒的差距）。第二是被访问过的数据，有很大概率会被再次访问。</p>
+
+<h2 id="page-cache">Page Cache</h2>
+
+<p>Page cache由内存中的物理page组成，其内容对应磁盘上的block。page cache的大小是动态变化的，可以扩大，也可以在内存不足时缩小。cache缓存的存储设备被称为后备存储（backing store），注意我们在block I/O中提到的：一个page通常包含多个block，这些block不一定是连续的。</p>
+
+<h3 id="读cache">读Cache</h3>
+
+<p>当内核发起一个读请求时（例如进程发起read()请求），首先会检查请求的数据是否缓存到了page cache中，如果有，那么直接从内存中读取，不需要访问磁盘，这被称为cache命中（cache hit）。如果cache中没有请求的数据，即cache未命中（cache miss），就必须从磁盘中读取数据。然后内核将读取的数据缓存到cache中，这样后续的读请求就可以命中cache了。page可以只缓存一个文件部分的内容，不需要把整个文件都缓存进来。</p>
+
+<h3 id="写cache">写Cache</h3>
+
+<p>当内核发起一个写请求时（例如进程发起write()请求），同样是直接往cache中写入，后备存储中的内容不会直接更新。内核会将被写入的page标记为dirty，并将其加入dirty list中。内核会周期性地将dirty list中的page写回到磁盘上，从而使磁盘上的数据和内存中缓存的数据一致。</p>
+
+<h3 id="cache回收">Cache回收</h3>
+
+<p>Page cache的另一个重要工作是释放page，从而释放内存空间。cache回收的任务是选择合适的page释放，并且如果page是dirty的，需要将page写回到磁盘中再释放。理想的做法是释放距离下次访问时间最久的page，但是很明显，这是不现实的。下面先介绍LRU算法，然后介绍基于LRU改进的Two-List策略，后者是Linux使用的策略。</p>
+
+<h4 id="lru算法">LRU算法</h4>
+
+<p>LRU（least rencently used)算法是选择最近一次访问时间最靠前的page，即干掉最近没被光顾过的page。原始LRU算法存在的问题是，有些文件只会被访问一次，但是按照LRU的算法，即使这些文件以后再也不会被访问了，但是如果它们是刚刚被访问的，就不会被选中。</p>
+
+<h4 id="two-list策略">Two-List策略</h4>
+
+<p>Two-List策略维护了两个list，active list 和 inactive list。在active list上的page被认为是hot的，不能释放。只有inactive list上的page可以被释放的。首次缓存的数据的page会被加入到inactive list中，已经在inactive list中的page如果再次被访问，就会移入active list中。两个链表都使用了伪LRU算法维护，新的page从尾部加入，移除时从头部移除，就像队列一样。如果active list中page的数量远大于inactive list，那么active list头部的页面会被移入inactive list中，从而位置两个表的平衡。</p>
+
+<h2 id="page-cache在linux中的具体实现">Page Cache在Linux中的具体实现</h2>
+
+<h3 id="address-space结构">address_space结构</h3>
+
+<p>内核使用address_space结构来表示一个page cache，address_space这个名字起得很糟糕，叫page_ache_entity可能更合适。下面是address_space的定义</p>
+
+<pre><code class="language-C">struct address_space {
+    struct inode            *host;              /* owning inode */
+    struct radix_tree_root  page_tree;          /* radix tree of all pages */
+    spinlock_t              tree_lock;          /* page_tree lock */
+    unsigned int            i_mmap_writable;    /* VM_SHARED ma count */
+    struct prio_tree_root   i_mmap;             /* list of all mappings */
+    struct list_head        i_mmap_nonlinear;   /* VM_NONLINEAR ma list */
+    spinlock_t              i_mmap_lock;        /* i_mmap lock */
+    atomic_t                truncate_count;     /* truncate re count */
+    unsigned long           nrpages;            /* total number of pages */
+    pgoff_t                 writeback_index;    /* writeback start offset */
+    struct address_space_operations *a_ops;     /* operations table */
+    unsigned                long flags;         /* gfp_mask and error flags */
+    struct backing_dev_info *backing_dev_info;  /* read-ahead information */
+    spinlock_t              private_lock;       /* private lock */
+    struct list_head        private_list;       /* private list */
+    struct address_space    *assoc_mapping;     /* associated buffers */
+};
+</code></pre>
+
+<p>其中 host域指向对应的inode对象，host有可能为NULL，这意味着这个address_space不是和一个文件关联，而是和swap area相关，swap是Linux中将匿名内存（比如进程的堆、栈等，没有一个文件作为back store）置换到swap area（比如swap分区）从而释放物理内存的一种机制。page_tree保存了该page cache中所有的page，使用基数树(radix Tree)来存储。i_mmap是保存了所有映射到当前page cache（物理的）的虚拟内存区域（VMA）。nrpages是当前address_space中page的数量。</p>
+
+<h3 id="address-space操作函数">address_space操作函数</h3>
+
+<p>address_space中的a_ops域指向操作函数表（struct address_space_operations），每个后备存储都要实现这个函数表，比如ext3文件系统在fs/ext3/inode.c中实现了这个函数表。</p>
+
+<p>内核使用函数表中的函数管理page cache，其中最重要的两个函数是readpage() 和writepage()</p>
+
+<h4 id="readpage-函数">readpage()函数</h4>
+
+<p>readpage()首先会调用find_get_page(mapping, index)在page cache中寻找请求的数据，mapping是要寻找的page cache对象，即address_space对象，index是要读取的数据在文件中的偏移量。如果请求的数据不在该page cache中，那么内核就会创建一个新的page加入page cache中，并将要请求的磁盘数据缓存到该page中，同时将page返回给调用者。</p>
+
+<h4 id="writepage-函数">writepage() 函数</h4>
+
+<p>对于文件映射（host指向一个inode对象），page每次修改后都会调用SetPageDirty（page）将page标识为dirty。（个人理解swap映射的page不需要dirty，是因为不需要考虑断电丢失数据的问题，因为内存的数据断电时默认就是会失去的）内核首先在指定的address_space寻找目标page，如果没有，就分配一个page并加入到page cache中，然后内核发起一个写请求将数据从用户空间拷入内核空间，最后将数据写入磁盘中。（对从用户空间拷贝到内核空间不是很理解，后期会重点学习Linux读、写文件的详细过程然后写一篇详细的blog介绍）</p>
+
+<h2 id="buffer-cache">Buffer Cache</h2>
+
+<p>在Block I/O的文章中提到用于表示内存到磁盘映射的buffer_head结构，每个buffer-block映射都有一个buffer_head结构，buffer_head中的b_assoc_map指向了address_space。在Linux2.4中，buffer cache和 page cache之间是独立的，前者使用老版本的buffer_head进行存储，这导致了一个磁盘block可能在两个cache中同时存在，造成了内存的浪费。2.6内核中将两者合并到了一起，使buffer_head只存储buffer-block的映射信息，不再存储block的内容。这样保证一个磁盘block在内存中只会有一个副本，减少了内存浪费。</p>
+
+<h2 id="flusher线程群-flusher-threads">Flusher线程群（Flusher Threads）</h2>
+
+<p>Page cache推迟了文件写入后备存储的时间，但是dirty page最终还是要被写回磁盘的。</p>
+
+<p>内核在下面三种情况下会进行会将dirty page写回磁盘：</p>
+
+<ul>
+<li>用户进程调用sync() 和 fsync()系统调用</li>
+<li>空闲内存低于特定的阈值（threshold）</li>
+<li>Dirty数据在内存中驻留的时间超过一个特定的阈值</li>
+</ul>
+
+<p>线程群的特点是让一个线程负责一个存储设备（比如一个磁盘驱动器），多少个存储设备就用多少个线程。这样可以避免阻塞或者竞争的情况，提高效率。当空闲内存低于阈值时，内核就会调用wakeup_flusher_threads()来唤醒一个或者多个flusher线程，将数据写回磁盘。为了避免dirty数据在内存中驻留过长时间（避免在系统崩溃时丢失过多数据），内核会定期唤醒一个flusher线程，将驻留时间过长的dirty数据写回磁盘。</p>
+
+<h2 id="参考资料">参考资料</h2>
+
+<p>《Linux Kernel Development 3rd Edition》</p>
+
+<p>《Understanding The Linux Kernel 3rd Edition》</p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/6d9091df3638fb9f6cea7867d7dd2e8281435b8c/">https://www.huliujia.com/blog/6d9091df3638fb9f6cea7867d7dd2e8281435b8c/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/4645655cea5d5b6ecb20280536cd86e547421eeb/">Linux内核学习笔记（七）系统调用</a></li>
+        
+        <li><a href="/blog/3fbf8bbcd3d7fe167ceefd76538053515946babd/">Linux内核学习笔记（六）进程调度</a></li>
+        
+        <li><a href="/blog/9c6895a796464a3bac7fba4b17f76e1ae03d2ab4/">Linux内核学习笔记（五）进程地址空间</a></li>
+        
+        <li><a href="/blog/23e0a634f0ac72e53813ffbd8a042fbebff97041/">Linux内核学习笔记（四）进程管理</a></li>
+        
+        <li><a href="/blog/b332e9cef68c8d3efe84778931ffb98a6173812d/">Linux内核学习笔记（三）Block I/O层</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/linux">Linux</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/page-cache">Page Cache</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

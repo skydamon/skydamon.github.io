@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>C&#43;&#43; on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/c&#43;&#43;/</link>
+    <description>Recent content in C&#43;&#43; on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Wed, 11 Apr 2018 19:27:41 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/c++/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>《C和C&#43;&#43;程序员面试秘笈》中存在的错误</title>
+      <link>https://www.huliujia.com/blog/8a209e5005fd17ec570ced231e48fa4165fde3b7/</link>
+      <pubDate>Wed, 11 Apr 2018 19:27:41 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/8a209e5005fd17ec570ced231e48fa4165fde3b7/</guid>
+      <description>最近在复习C++面试的考点，所以购买了《C和C++程序员面试秘笈》这本书（人民邮电出版社2014.3 ISBN：978-7-115-34113-6）。 书整体上是非常不错的，知识点覆盖比较全面，很符合我的需求。美中不足的是书中的错误有点多。阅读的过程中自己做了</description>
+    </item>
+    
+  </channel>
+</rss>

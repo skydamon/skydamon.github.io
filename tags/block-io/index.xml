@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Block IO on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/block-io/</link>
+    <description>Recent content in Block IO on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Fri, 27 Apr 2018 22:11:59 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/block-io/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>Linux内核学习笔记（三）Block I/O层</title>
+      <link>https://www.huliujia.com/blog/b332e9cef68c8d3efe84778931ffb98a6173812d/</link>
+      <pubDate>Fri, 27 Apr 2018 22:11:59 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/b332e9cef68c8d3efe84778931ffb98a6173812d/</guid>
+      <description>块设备（Block Device）简介 块设备是一种以块（block）为单位可以进行随机存取的硬件设备。常见的块设备有硬盘，软盘，闪存等。 块设备的最小寻址单元是扇区（sector），一个扇区是2\^n个字节，512Bytes是最常见的扇区大小。内核的文件系统使</description>
+    </item>
+    
+  </channel>
+</rss>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>BlockBuilder on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/blockbuilder/</link>
+    <description>Recent content in BlockBuilder on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Mon, 04 Oct 2021 10:45:17 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/blockbuilder/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>LevelDB源码解析(8) BlockBuilder</title>
+      <link>https://www.huliujia.com/blog/6a7ee0401f/</link>
+      <pubDate>Mon, 04 Oct 2021 10:45:17 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/6a7ee0401f/</guid>
+      <description>背景 一个SST文件由5个区块组成，其中三个区块都是由BlockBuilder构建的，所以在讲SST文件的构建之前，先讲一下BlockBuilder。BlockBuilder接受一组key-value，将其序列化到buffer中，buffer的数据就是要写入</description>
+    </item>
+    
+  </channel>
+</rss>

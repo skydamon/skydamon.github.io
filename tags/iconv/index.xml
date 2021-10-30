@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>iconv on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/iconv/</link>
+    <description>Recent content in iconv on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Mon, 12 Nov 2018 22:33:03 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/iconv/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>使用iconv对文件批量转码</title>
+      <link>https://www.huliujia.com/blog/7fc896e6b3af6549919994ab59d5cbe549f805ce/</link>
+      <pubDate>Mon, 12 Nov 2018 22:33:03 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7fc896e6b3af6549919994ab59d5cbe549f805ce/</guid>
+      <description>Windows下中文使用的编码一般默认为GB18030，git无法识别里面的中文，在Linux和Mac上打开会出现乱码问题 使用file命令可以查看文件编码 #hello.cpp为文件名 file hello.cpp iconv可以对单个文件进行转码,使用方式如下： 显示支持的编码 iconv -l 将G</description>
+    </item>
+    
+  </channel>
+</rss>

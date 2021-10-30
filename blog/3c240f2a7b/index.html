@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>LevelDB源码解析(5) WriteBatch | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="LevelDB源码解析(5) WriteBatch - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2021-04-18T21:34:10&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2021-04-18T21:34:10&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="LevelDB源码解析(5) WriteBatch">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/3c240f2a7b/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">LevelDB源码解析(5) WriteBatch</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2021年4月18日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h2 id="简介">简介</h2>
+
+<p>LevelDB的官方注释是这么介绍WriteBatch的：</p>
+
+<blockquote>
+<p>WriteBatch holds a collection of updates to apply atomically to a DB</p>
+</blockquote>
+
+<p>如何保证原子性可能需要看完对WriteBatch的使用才能理清楚，这里只能确定一个WriteBatch对象可以包含多条更新记录（插入/删除），支持批量写入。</p>
+
+<p>WriteBatch的很多操作是通过辅助类来实现的，辅助类会直接操作WriteBatch的成员变量，本文会先介绍WriteBatch的成员变量和这些辅助类，最后介绍WrteBatch的成员函数</p>
+
+<h2 id="writebatch的成员变量">WriteBatch的成员变量</h2>
+
+<p>WriteBatch只有一个成员，是个字符串类型。所有更新记录都会编码后写入到这个 rep_ 中。</p>
+
+<pre><code class="language-C++">std::string rep_;
+</code></pre>
+
+<p>rep_ 的编码格式如下：</p>
+
+<table>
+<thead>
+<tr>
+<th>字节数</th>
+<th>8字节</th>
+<th>4字节</th>
+<th>变长</th>
+<th>变长</th>
+<th>变长</th>
+<th>变长</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>内容</td>
+<td>sequence</td>
+<td>count</td>
+<td>record 1</td>
+<td>reocrd 2</td>
+<td>record 3</td>
+<td>record &hellip;</td>
+</tr>
+</tbody>
+</table>
+
+<p>sequence是一个64bit的序列号，每个WriteBatch都有一个唯一序列号。</p>
+
+<p>count为rep_包含的record（更新记录）数量。</p>
+
+<p>count后面是record列表，每个record的编码格式相同，格式如下：</p>
+
+<table>
+<thead>
+<tr>
+<th>字节数</th>
+<th>1字节</th>
+<th>变长</th>
+<th>key size</th>
+<th>变长</th>
+<th>value size</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>内容</td>
+<td>ValueType</td>
+<td>key size</td>
+<td>key</td>
+<td>value size</td>
+<td>value</td>
+</tr>
+</tbody>
+</table>
+
+<p>key size和value size使用的是<a href="https://www.huliujia.com/blog/7c34da2c9a2d27bea2ec43f9a0401724bc48bffd/">LevelDB的变长编码格式</a></p>
+
+<h2 id="writebatchinternal-辅助类">WriteBatchInternal 辅助类</h2>
+
+<p>WriteBatchInternal没有成员变量，只有成员函数。</p>
+
+<h3 id="setcount与count">SetCount与Count</h3>
+
+<pre><code class="language-C++">void WriteBatchInternal::SetCount(WriteBatch* b, int n)
+{
+  EncodeFixed32(&amp;b-&gt;rep_[8], n);
+}
+
+int WriteBatchInternal::Count(const WriteBatch* b)
+{
+  return DecodeFixed32(b-&gt;rep_.data() + 8);
+}
+</code></pre>
+
+<p>SetCount调用EncodeFixed32把输入的参数n以小端编码方式写入WriteBatch的rep_的count域。</p>
+
+<p>Count调用DecodeFixed32把rep_的count域解码后返回。</p>
+
+<h3 id="setsequence与sequence">SetSequence与Sequence</h3>
+
+<pre><code class="language-C++">void WriteBatchInternal::SetSequence(WriteBatch* b, SequenceNumber seq)
+{
+  EncodeFixed64(&amp;b-&gt;rep_[0], seq);
+}
+
+SequenceNumber WriteBatchInternal::Sequence(const WriteBatch* b)
+{
+  return SequenceNumber(DecodeFixed64(b-&gt;rep_.data()));
+}
+</code></pre>
+
+<p>SetSequence调用EncodeFixed64把序列号seq以小端编码写入到rep_的sequence域。这里的SequenceNumber其实就是std::uint64_t类型。</p>
+
+<p>Sequence函数调用DecodeFixed64把rep_的sequence域解码后返回。</p>
+
+<h3 id="setcontents与contents-bytesize">SetContents与Contents、ByteSize</h3>
+
+<pre><code class="language-C++">void WriteBatchInternal::SetContents(WriteBatch* b, const Slice&amp; contents)
+{
+  assert(contents.size() &gt;= kHeader);
+  b-&gt;rep_.assign(contents.data(), contents.size());
+}
+
+static Slice WriteBatchInternal::Contents(const WriteBatch* batch){ return Slice(batch-&gt;rep_); }
+
+static size_t WriteBatchInternal::ByteSize(const WriteBatch* batch){ return batch-&gt;rep_.size(); }
+</code></pre>
+
+<p>SetContent用conents覆盖了rep_。kHeader的值为12，就是sequence域和count域的总长度，这两个域是必须有的。</p>
+
+<p>Contents把rep_包装成Slice对象返回。Slice在前面的文章提过，当成字符串看待就可以了。</p>
+
+<p>ByteSize返回rep_的size，即rep_的字节数。</p>
+
+<h3 id="append">Append</h3>
+
+<pre><code class="language-C++">void WriteBatchInternal::Append(WriteBatch* dst, const WriteBatch* src)
+{
+  SetCount(dst, Count(dst) + Count(src));
+  assert(src-&gt;rep_.size() &gt;= kHeader);
+  dst-&gt;rep_.append(src-&gt;rep_.data() + kHeader, src-&gt;rep_.size() - kHeader);
+}
+</code></pre>
+
+<p>Append是比较重要的一个函数，有两个参数，dst和src。Append把src的数据附加合并(append)到dst中。</p>
+
+<p>合并后，dst的sequence域不变，dst的count域值等于dst和src的count之和。src的record列表附加合并到了dst的reocrd列表后面。</p>
+
+<h3 id="insertinto">InsertInto</h3>
+
+<pre><code class="language-C++">Status WriteBatchInternal::InsertInto(const WriteBatch* b, MemTable* memtable)
+{
+  MemTableInserter inserter;
+  inserter.sequence_ = WriteBatchInternal::Sequence(b);
+  inserter.mem_ = memtable;
+  return b-&gt;Iterate(&amp;inserter);
+}
+</code></pre>
+
+<p>构造MemTableInserter对象，填充sequence和Memtable对象指针。然后调用WriteBatch的Iterate把当前batch的更新记录插入到memtable中。</p>
+
+<h2 id="memtableinserter辅助类">MemTableInserter辅助类</h2>
+
+<p>MemTableInserter辅助类用于把记录插入MemTable。MemTableInserter继承了Handler，Handler是一个抽象类，只有Put和Delete两个纯虚函数。</p>
+
+<p>Handler使用了模板方法设计模式，这样可以很方便地搞出不同版本的Handler，比如MemTableInserterPro等。</p>
+
+<pre><code class="language-C++">namespace
+{
+  class MemTableInserter : public WriteBatch::Handler
+  {
+  public:
+    SequenceNumber sequence_;
+    MemTable* mem_;
+
+    void Put(const Slice&amp; key, const Slice&amp; value) override
+    {
+      mem_-&gt;Add(sequence_, kTypeValue, key, value);
+      sequence_++;
+    }
+
+    void Delete(const Slice&amp; key) override
+    {
+      mem_-&gt;Add(sequence_, kTypeDeletion, key, Slice());
+      sequence_++;
+    }
+  };
+}
+</code></pre>
+
+<p>笔者看到代码的时候非常困惑，为什么要写一个没有名字的namespace呢？特意去查了一下，这种叫做匿名namespace，可以让namespace内部的函数、类、对象等只能在当前文件里被访问，和C语言的static作用域类似。</p>
+
+<h3 id="成员变量">成员变量</h3>
+
+<p>MemTableInserter包含两个成员变量，sequence_和mem_。sequence_是插入Memtable时要填写的序列号。mem_是Memtable对象指针。</p>
+
+<h3 id="put">Put</h3>
+
+<p>调用Memtable的Add函数，添加一条记录，记录类型为kTypeValue，表示这是一个插入记录。</p>
+
+<h3 id="delete">Delete</h3>
+
+<p>调用Memtable的Add函数，添加一条记录，记录类型为kTypeDeletion，表示这是一个删除记录。</p>
+
+<h2 id="writebatch-成员函数">WriteBatch 成员函数</h2>
+
+<h3 id="put-1">Put</h3>
+
+<pre><code class="language-C++">void WriteBatch::Put(const Slice&amp; key, const Slice&amp; value)
+{
+  WriteBatchInternal::SetCount(this, WriteBatchInternal::Count(this) + 1);
+  rep_.push_back(static_cast&lt;char&gt;(kTypeValue));
+  PutLengthPrefixedSlice(&amp;rep_, key);
+  PutLengthPrefixedSlice(&amp;rep_, value);
+}
+</code></pre>
+
+<p>首先是把rep_的count域加1。然后把ValueType、key和value编码成一个record，写到rep_的后面。</p>
+
+<h3 id="delete-1">Delete</h3>
+
+<pre><code class="language-C++">void WriteBatch::Delete(const Slice&amp; key)
+{
+  WriteBatchInternal::SetCount(this, WriteBatchInternal::Count(this) + 1);
+  rep_.push_back(static_cast&lt;char&gt;(kTypeDeletion));
+  PutLengthPrefixedSlice(&amp;rep_, key);
+}
+</code></pre>
+
+<p>LevelDB中删除元素是通过添加一条删除记录来实现的，所以删除还是添加一条记录，和Put的区别有两个，一个是record的ValueType是kTypeDeletetion，另一个是表示删除的record只有key，没有value。</p>
+
+<h3 id="append-1">Append</h3>
+
+<pre><code class="language-C++">void WriteBatch::Append(const WriteBatch&amp; source)
+{
+  WriteBatchInternal::Append(this, &amp;source);
+}
+</code></pre>
+
+<p>调用WriteBatchInternal的Append，把source合并到当前的WriteBatch对象。</p>
+
+<h3 id="iterate">Iterate</h3>
+
+<pre><code class="language-C++">Status WriteBatch::Iterate(Handler* handler) const
+{
+  Slice input(rep_);
+  if( input.size() &lt; kHeader )
+  {
+    return Status::Corruption(&quot;malformed WriteBatch (too small)&quot;);
+  }
+
+  input.remove_prefix(kHeader);
+  Slice key, value;
+  int found = 0;
+  while( !input.empty())
+  {
+    found++;
+    char tag = input[0];
+    input.remove_prefix(1);
+    switch( tag )
+    {
+      case kTypeValue:
+        if( GetLengthPrefixedSlice(&amp;input, &amp;key) &amp;&amp; GetLengthPrefixedSlice(&amp;input, &amp;value))
+        {
+          handler-&gt;Put(key, value);
+        }else
+        {
+          return Status::Corruption(&quot;bad WriteBatch Put&quot;);
+        }
+        break;
+      case kTypeDeletion:
+        if( GetLengthPrefixedSlice(&amp;input, &amp;key))
+        {
+          handler-&gt;Delete(key);
+        }else
+        {
+          return Status::Corruption(&quot;bad WriteBatch Delete&quot;);
+        }
+        break;
+      default:
+        return Status::Corruption(&quot;unknown WriteBatch tag&quot;);
+    }
+  }
+  if( found != WriteBatchInternal::Count(this))
+  {
+    return Status::Corruption(&quot;WriteBatch has wrong count&quot;);
+  }else
+  {
+    return Status::OK();
+  }
+}
+</code></pre>
+
+<p>上面的代码挺多，但是逻辑很简单，就是遍历。把WriteBatch的rep_解码，对每个record，根据ValueType域，调用handler的Put添加插入记录或者调用Delete添加删除记录。</p>
+
+<p>遍历过程中和遍历完成后都会进行一些校验，如果发现数据有问题，就返回一个&rdquo;Corruption&rdquo;状态。如果数据ok，返回一个&rdquo;OK&rdquo;状态。</p>
+
+<h3 id="approximatesize-与-clear">ApproximateSize 与 Clear</h3>
+
+<p>ApproximateSize返回rep_的size，Clear清除rep_的record列表，并把sequence域和count域置0。</p>
+
+<h2 id="为什么要独立出来一个writebatchinternal">为什么要独立出来一个WriteBatchInternal</h2>
+
+<p>从代码功能来看，作者把对WriteBatch的rep_的解码和编码工作都收纳到了WriteBatchInternal里，而WriteBatch只有供外部使用的封装接口。使让代码结构更加清晰。</p>
+
+<p>但是有一个例外，WriteBatch的Iterate成员函数是有对rep_进行解码的。按照上面的想法，Iterate应当由WriteBatchInternal来实现，WriteBatch再调用才对。可能是笔者对这里的理解还有些偏差，欢迎在评论区发表想法。</p>
+
+<h2 id="源码版本">源码版本</h2>
+
+<p><a href="https://github.com/google/leveldb/releases/tag/1.22">https://github.com/google/leveldb/releases/tag/1.22</a></p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/3c240f2a7b/">https://www.huliujia.com/blog/3c240f2a7b/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/c5e8646cb4765da867b3936b2bae62843bded7e5/">LevelDB源码解析(4) MemTable</a></li>
+        
+        <li><a href="/blog/7c34da2c9a2d27bea2ec43f9a0401724bc48bffd/">LevelDB源码解析(3) 变长编码</a></li>
+        
+        <li><a href="/blog/bcd8d4d2415144bf21c2e3fc695cf55510653264/">LevelDB源码解析(2) SkipList(跳跃表)</a></li>
+        
+        <li><a href="/blog/e6640480282d9a4273dcf04cb98adc60c2961dd5/">LevelDB源码解析(1) Arena内存分配器</a></li>
+        
+        <li><a href="/blog/071730c4c3f23dbd8c6eaf0e524873206fcf56d3/">跳跃表（SkipList）从原理到实现</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/leveldb">LevelDB</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/writebatch">WriteBatch</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

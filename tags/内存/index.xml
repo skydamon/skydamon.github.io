@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>内存 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/</link>
+    <description>Recent content in 内存 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Tue, 09 Mar 2021 08:56:50 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>LevelDB源码解析(1) Arena内存分配器</title>
+      <link>https://www.huliujia.com/blog/e6640480282d9a4273dcf04cb98adc60c2961dd5/</link>
+      <pubDate>Tue, 09 Mar 2021 08:56:50 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/e6640480282d9a4273dcf04cb98adc60c2961dd5/</guid>
+      <description>背景 LevelDB中需要频繁申请和释放内存，如果直接使用系统的new/delete或者malloc/free接口申请和释放内存，会产生大量内存碎片，进而拖累系统的性能表现。所以LevelDB实现了一个Area内存分配器来对内存进行管理，以保证性能。 Aren</description>
+    </item>
+    
+  </channel>
+</rss>

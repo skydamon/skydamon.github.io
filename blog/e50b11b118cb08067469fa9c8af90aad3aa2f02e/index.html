@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>简易编译器实现（二）使用Bison创建语法分析器 | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="简易编译器实现（二）使用Bison创建语法分析器 - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2020-09-17T09:20:27&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2020-09-17T09:20:27&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="简易编译器实现（二）使用Bison创建语法分析器">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/e50b11b118cb08067469fa9c8af90aad3aa2f02e/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">简易编译器实现（二）使用Bison创建语法分析器</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2020年9月17日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B">教程</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<p><a href="https://www.huliujia.com/blog/7bdf23e1aadefa13286b73c3aa4063a5836b1a37/">简易编译器实现（一）使用Flex创建词法分析器</a>一文介绍了编译器的概念和七个阶段，并说明了如何使用Flex创建词法分析器。本篇文章介绍如何使用Bison创建语法分析器，并实现基本的运算能力。本文继续使用<a href="https://www.huliujia.com/blog/7bdf23e1aadefa13286b73c3aa4063a5836b1a37/">简易编译器实现（一）使用Flex创建词法分析器</a>中提出的集合运算语言AlphaGun作为演示的例子。</p>
+
+<h2 id="语法分析">语法分析</h2>
+
+<p>语法分析器使用词法分析器输出的token流作为输入，把token流转换成树状的中间表示，通常会转换成语法树，本文中使用的例子比较简单，所以会对结果进行直接计算。复杂的语言通常会先构建语法树，然后在语法树的基础上做一系列的处理。如果输入的token流不符合语法分析器的规定的语法，语法分析器还可以报语法错误。</p>
+
+<p>和词法分析器自动生成类似，我们可以利用Bison来自动生成语法分析器，提高开发速度，降低迭代成本和维护成本。本文主要介绍Bison的使用。</p>
+
+<h2 id="bison的语法">Bison的语法</h2>
+
+<p>Bison语法规则和Flex一样分为3个部分，第一部分是C语言声明、token声明、类型声明。由&rdquo;%{&ldquo;和&rdquo;}%&ldquo;围住的C语言部分会被直接拷贝到生成的语法分析器代码前面。第二部分是使用<a href="https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form">BNF语法</a>编写的语法规则，为了编写方便，Bison对BNF做了一定的简化。第三部分是要执行的main函数。</p>
+
+<p>下面是为集合运算语言AlphaGun编写的Bison规则，代码量比较大，可以直接翻到下面看解释</p>
+
+<pre><code class="language-bison">%{
+    #include &lt;stdio.h&gt;
+    #include &lt;string.h&gt;
+    #include &lt;stdlib.h&gt;
+    #include &lt;stdarg.h&gt;
+
+    #define NAME_SIZE 100
+    #define CHAR_SET_SIZE 26
+
+    extern int yylineno; /* from lexer */
+    int yylex();
+    void yyerror(char *s, ...)
+    {
+        va_list ap;
+        va_start(ap, s);
+
+        fprintf(stderr, &quot;%d: error: &quot;, yylineno);
+        vfprintf(stderr, s, ap);
+        fprintf(stderr, &quot;\n&quot;);
+    }
+
+    struct Symbol
+    {
+        char name;
+        char value[CHAR_SET_SIZE];
+    };
+
+    struct Symbol symbol_table[26];
+    char temp_char_set[CHAR_SET_SIZE];
+    char factor_char_set[CHAR_SET_SIZE];
+    char expr_char_set[CHAR_SET_SIZE];
+
+    struct Symbol* NewSymbol()
+    {
+        struct Symbol* symbol =  (struct Symbol*)malloc(sizeof(struct Symbol));
+        symbol-&gt;name = 0;
+        memset(symbol-&gt;value, 0, sizeof(symbol-&gt;value));
+    }
+
+    void PrintCharSet(char name, const char* char_set)
+    {
+        printf(&quot;%c: [&quot;, name);
+        int need_comma = 0;
+        for(int i=0; i&lt; CHAR_SET_SIZE; i++)
+        {
+            if(char_set[i] != 0)
+            {
+                if(need_comma == 1)
+                {
+                    printf(&quot;,&quot;);
+                }
+                printf(&quot;%c&quot;, char_set[i]);
+                need_comma = 1;
+            }
+        }
+        printf(&quot;]\n&quot;);
+    }
+
+    void PrintSymbol(const struct Symbol* symbol)
+    {
+        PrintCharSet(symbol-&gt;name, symbol-&gt;value);
+    }
+
+    void Union(char* result_char_set, const char* char_set_1, const char* char_set_2)
+    {
+        memcpy(result_char_set, char_set_1, CHAR_SET_SIZE);
+        for(int i=0; i&lt;CHAR_SET_SIZE; i++)
+        {
+            if(char_set_2[i] != 0)
+            {
+                result_char_set[i] = char_set_2[i];
+            }
+        }
+    }
+
+    void Intersect(char* result_char_set, const char* char_set_1, const char* char_set_2)
+    {
+        for(int i=0;i &lt;CHAR_SET_SIZE; i++)
+        {
+            if(char_set_1[i] != char_set_2[i] || char_set_1[i] == 0)
+            {
+                result_char_set[i] = 0;
+            }else
+            {
+                result_char_set[i] = char_set_1[i];
+            }
+        }
+    }
+
+    void Substract(char* result_char_set, const char* char_set_1, const char* char_set_2)
+    {
+        for(int i=0;i &lt;CHAR_SET_SIZE; i++)
+        {
+
+            if(char_set_1[i] == 0 || char_set_1[i] == char_set_2[i])
+            {
+                result_char_set[i] = 0;
+            }else
+            {
+                result_char_set[i] = char_set_1[i];
+            }
+        }
+    }
+%}
+
+%union
+{
+    char name;
+    char element;
+    char* char_set;
+}
+
+%token PRINT
+%token &lt;name&gt; IDENTIFIER
+%token &lt;element&gt; CHAR
+%token COMMA
+%token LEFT_BRACKET
+%token RIGHT_BRACKET
+%token ASSIGN
+%token UNION
+%token INTERSECT
+%token SUBSTRACT
+%token NEWLINE
+
+%type &lt;char_set&gt; char_list init_list factor expr
+
+%%
+
+language: /* nothing */
+    | language statement NEWLINE
+    | language NEWLINE  /*允许空行出现*/
+
+statement: PRINT IDENTIFIER { PrintSymbol(&amp;symbol_table[$2 - 'A']); }
+    | IDENTIFIER ASSIGN init_list { symbol_table[$1-'A'].name = $1; memcpy(symbol_table[$1-'A'].value, $3, CHAR_SET_SIZE); }
+    | IDENTIFIER ASSIGN expr      { symbol_table[$1-'A'].name = $1; memcpy(symbol_table[$1-'A'].value, $3, CHAR_SET_SIZE); }
+
+expr: factor { $$ = expr_char_set; memcpy($$, $1, CHAR_SET_SIZE); }
+    | expr SUBSTRACT factor { Substract($$, $1, $3); }
+
+factor: IDENTIFIER { $$ = factor_char_set; memcpy($$, symbol_table[$1-'A'].value, CHAR_SET_SIZE); }
+    | factor UNION IDENTIFIER { Union($$, $1, symbol_table[$3-'A'].value); }
+    | factor INTERSECT IDENTIFIER  { Intersect($$, $1, symbol_table[$3-'A'].value); }
+
+init_list: LEFT_BRACKET char_list RIGHT_BRACKET  { $$ = $2; }
+
+char_list: CHAR { $$ = temp_char_set; memset($$, 0, 26); $$[$1-'a'] = $1; }
+    | char_list COMMA CHAR  { $$[$3-'a'] = $3; }
+
+%%
+
+int main(int argc, char ** argv)
+{
+    yyparse();
+}
+</code></pre>
+
+<h3 id="bision规则第一部分">Bision规则第一部分</h3>
+
+<p>C语言部分，包含了需要的头文件，声明了几个函数，这些函数将在BNF语法规则部分用到。实现了yyerror，使得生成的语法分析器可以打印语法错误的相关信息，另外为了避免编译错误，前置声明了yylex。</p>
+
+<p>token声明部分，首先定义了yylval的union类型。这里yylval由name、element、char_set三种变量联合组成，<strong>%token&lt;name&gt; IDENTIFIER</strong> 声明了IDENTIFIER token类型，并且告诉Bison，IDENTIFIER使用union类型的name变量存储值，这样在BNF语法规则部分，\$N就会直接指代name变量。类似的CHAR使用element变量，\$N指代element。</p>
+
+<p>type声明部分，声明了char_list, init_list, facotr, expr这4种非终结符使用union类型的char_set变量。如果没有这个声明的话，在BNF语法规则部分，是不能给非终结符的值变量\$\$赋值的。</p>
+
+<h3 id="bison规则第二部分">Bison规则第二部分</h3>
+
+<p>第二部分是BNF语法规则部分，BNF语法规则如果细说的话又是一篇长文，这里简单介绍一下。每个规则的最左边是非终结符，冒号右边是非终结符的推导规则，一个非终结符如果有多个推到规则，使用竖线 | 分割。每个推导规则都可以对应一个动作，由 { } 包含，使用C语言代码编写。第一个规则的非终结符也被称为起始符，最终语言的全部输入都会最终匹配到起始符这里。Bison会自动对输入的token流进行解析，对匹配到的推导规则，执行动作代码，如果没有动作代码，会继续往下匹配。Bison中的每个token和非终结符都可以有一个值变量，这个是在上面的%token和%type声明中定义的。每个推导规则中，非终结符的值保存在\$\$中，推导规则中出现的符号的值分别保存在\$1、\$2
+、\$3、&hellip; 中。\$\$、\$1、\$2等实际指向的就是前面提到的yylval的union类型的具体变量。比如：</p>
+
+<pre><code class="language-bash">init_list: LEFT_BRACKET char_list RIGHT_BRACKET
+</code></pre>
+
+<p>init_list的值变量是\$\$，而LEFT_BRACKET的值变量就是\$1，但是显然左括号不会有值，所以这里\$1实际上是无用的，char_list的值变量是\$2，在动作部分我们把\$2赋值给了\$1，从而实现了集合的初始化动作。</p>
+
+<h3 id="bison规则第三部分">Bison规则第三部分</h3>
+
+<p>第三部分是main函数，直接调用了yyparse函数，yyparse是Bison生成的语法分析器入口，yyparse会不断地调用yylex获取token流去解析，和语法规则去做匹配，直到token流结束或者发现语法错误。</p>
+
+<h2 id="执行bison">执行Bison</h2>
+
+<p>首先把<a href="https://www.huliujia.com/blog/7bdf23e1aadefa13286b73c3aa4063a5836b1a37/">简易编译器实现（一）使用Flex创建词法分析器</a>中的Flex规则文件做一点修改，修改结果如下：</p>
+
+<pre><code class="language-flex">%option noyywrap yylineno
+%{
+    #include &lt;stdio.h&gt;
+    #include &quot;set_calc.tab.h&quot;
+    int fileno(FILE *stream);
+%}
+
+%%
+
+PRINT       { return PRINT; }
+[A-Z]       { yylval.name = yytext[0]; return IDENTIFIER; }
+[a-z]       { yylval.element = yytext[0]; return CHAR; }
+&quot;,&quot;         { return COMMA; }
+&quot;[&quot;         { return LEFT_BRACKET; }
+&quot;]&quot;         { return RIGHT_BRACKET; }
+&quot;=&quot;         { return ASSIGN; }
+&quot;∪&quot;         { return UNION; }
+&quot;∩&quot;         { return INTERSECT; }
+&quot;-&quot;         { return SUBSTRACT; }
+\n          { return NEWLINE; }
+&quot;//&quot;.*      { /* omit comment*/ }
+[ \t]       { /*ignore white space*/ }
+.           { printf(&quot;unexpected token: (%s)\n&quot;, yytext); }
+
+%%
+</code></pre>
+
+<p>删除了手动定义的枚举类型和yylva变量，包含了set_calc.tab.h头文件，这个头文件是由bison生成的，头文件中定义了枚举类型和yylval变量。为了避免编译错误，声明了fileno函数。</p>
+
+<h3 id="保存文件-联合flex编译">保存文件、联合Flex编译</h3>
+
+<p>把上面的Bison规则保存为set_calc.y，把flex规则保存为set_calc.l，编译</p>
+
+<pre><code class="language-bash">bison -d set_calc.y # 生成语法分析器
+flex set_calc.l # 生成词法分析器
+gcc -std=c99 -o set_calc set_calc.tab.c lex.yy.c # 编译生成可执行文件
+</code></pre>
+
+<h3 id="编写alphagun语言代码-保存为test-set">编写AlphaGun语言代码，保存为test.set</h3>
+
+<pre><code class="language-bash">A=[a,b,c,d,z]
+B=[c,d,e, f ] // test comment
+C=[e,f,g,h,z]
+D=[x,y,z]
+
+E = A ∪ B ∩ C - A ∩ B ∪ D
+
+PRINT A
+PRINT E
+</code></pre>
+
+<h3 id="执行alphagun代码">执行AlphaGun代码</h3>
+
+<pre><code class="language-bash">./set_calc &lt; test.set
+</code></pre>
+
+<h3 id="运行结果">运行结果</h3>
+
+<pre><code class="language-bash">A: [a,b,c,d,z]
+E: [e,f]
+</code></pre>
+
+<h2 id="语法树">语法树</h2>
+
+<p>对于复杂的语言，直接根据推导规则进行计算时无法实现的，所以在动作部分中可以构建语法树，最后集中处理、计算。</p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/e50b11b118cb08067469fa9c8af90aad3aa2f02e/">https://www.huliujia.com/blog/e50b11b118cb08067469fa9c8af90aad3aa2f02e/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/7bdf23e1aadefa13286b73c3aa4063a5836b1a37/">简易编译器实现（一）使用Flex创建词法分析器</a></li>
+        
+        <li><a href="/blog/4e4824434d272ec7be2bcf85c04cb2e57be3690e/">内联函数(inline Function)浅析</a></li>
+        
+        <li><a href="/blog/7255c95b81e55827c1b8e6cbf24f2f760c978e06/">学习笔记：相似度度量与协同过滤</a></li>
+        
+        <li><a href="/blog/ebab9bd78f525f25a01ef64345f279977c78a75f/">学习笔记：信息熵与决策树</a></li>
+        
+        <li><a href="/blog/69c52d7badd64f2cd86765a3a8fee88b5cfaa13b/">[译] Linux定时任务工具crontab入门教程</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/bison">Bison</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8">编译器</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90">语法分析</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

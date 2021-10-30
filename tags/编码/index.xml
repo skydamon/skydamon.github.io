@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>编码 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/</link>
+    <description>Recent content in 编码 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sun, 04 Apr 2021 18:35:23 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>LevelDB源码解析(3) 变长编码</title>
+      <link>https://www.huliujia.com/blog/7c34da2c9a2d27bea2ec43f9a0401724bc48bffd/</link>
+      <pubDate>Sun, 04 Apr 2021 18:35:23 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7c34da2c9a2d27bea2ec43f9a0401724bc48bffd/</guid>
+      <description>背景 LevelDB在内存中存储key、value时，最后是以单值形式存储到一个跳跃表中的，跳跃表我们在上一篇文章LevelDB源码解析之SkipList(跳跃表）聊过了。这里主要想谈一下，LevelDB是如何把key、value编码到一个单值里面的，顺带分</description>
+    </item>
+    
+    <item>
+      <title>使用iconv对文件批量转码</title>
+      <link>https://www.huliujia.com/blog/7fc896e6b3af6549919994ab59d5cbe549f805ce/</link>
+      <pubDate>Mon, 12 Nov 2018 22:33:03 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7fc896e6b3af6549919994ab59d5cbe549f805ce/</guid>
+      <description>Windows下中文使用的编码一般默认为GB18030，git无法识别里面的中文，在Linux和Mac上打开会出现乱码问题 使用file命令可以查看文件编码 #hello.cpp为文件名 file hello.cpp iconv可以对单个文件进行转码,使用方式如下： 显示支持的编码 iconv -l 将G</description>
+    </item>
+    
+  </channel>
+</rss>

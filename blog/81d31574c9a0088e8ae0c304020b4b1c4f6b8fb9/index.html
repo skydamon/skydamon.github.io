@@ -1,0 +1,1098 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Linux内核学习笔记（一）虚拟文件系统（VFS） | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="Linux内核学习笔记（一）虚拟文件系统（VFS） - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2018-04-20T15:40:05&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2018-04-20T15:40:05&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="Linux内核学习笔记（一）虚拟文件系统（VFS）">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/81d31574c9a0088e8ae0c304020b4b1c4f6b8fb9/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">Linux内核学习笔记（一）虚拟文件系统（VFS）</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2018年4月20日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/linux">Linux</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h2 id="什么是vfs">什么是VFS</h2>
+
+<p>Vritual Filesystem 是给用户空间程序提供统一的文件和文件系统访问接口的内核子系统。借助VFS，即使文件系统的类型不同（比如NTFS和ext3），也可以实现文件系统之间交互（移动、复制文件等），</p>
+
+<ul>
+<li>从用户空间程序的角度来看，VFS提供了一个统一的抽象、接口。这使得用户空间程序可以对不同类型的文件系统发起统一的系统调用，而不需要关心底层的文件系统类型。</li>
+<li>从文件系统的角度来看，VFS提供了一个基于Unix-style文件系统的通用文件模型（common file model），可以用来表示任何类型文件系统的通用特性和操作。底层文件系统提供VFS规定的接口和数据结构，从而实现对linux的支持。</li>
+</ul>
+
+<h2 id="vfs中的数据结构">VFS中的数据结构</h2>
+
+<p>VFS是面向对象的，VFS中的数据结构既包含数据也包含对该数据进行操作的函数的指针，虽然是使用C的数据结构来实现，但是思想上和面向对象编程是一致的。</p>
+
+<p>VFS的通用数据模型主要包括4种对象类型：</p>
+
+<ul>
+<li>Superblock对象，表示一个特定的已挂载文件系统</li>
+<li>Inode对象，表示一个特定的文件</li>
+<li>Dentry对象，表示一个directory entry，即dentry。路径上的每一个单独的组件，都是一个dentry。VFS中没有目录对象，目录只是一种文件。</li>
+<li>File对象，表示进程中打开的文件。</li>
+</ul>
+
+<p>每种对象类型都有着对应的操作操作函数表（相当于对象的方法）</p>
+
+<h2 id="superblock对象">Superblock对象</h2>
+
+<p>任何类型的文件系统都要实现Superblock对象，用于存储文件系统的描述信息。Superblock对象通常对应了磁盘上的filesystem superblock 或者 filesystem control block。非磁盘文件系统（比如基于内存的文件系统sysfs）需要动态地生成superblock对象，并将其保存在内存中。</p>
+
+<p>创建、管理、删除superblock对象的代码在fs/super.c中</p>
+
+<p>VFS使用super_block结构体来保存superblock对象。使用alloc_super()函数来创建和初始化superblock对象，文件系统挂载时，文件系统调用alloc_super()从磁盘中读取超级快，并填充super_block结构体.</p>
+
+<p>super_block结构体在&lt;linux/fs.h&gt;中定义的，只给出了部分域</p>
+
+<pre><code class="language-C">struct super_block
+{
+    struct list_head        s_list;           /* list of all superblocks */
+    dev_t                   s_dev;            /* identifier */
+    unsigned long           s_blocksize;      /* block size in bytes */
+    unsigned char           s_blocksize_bits; /* block size in bits */
+    unsigned char           s_dirt;           /* dirty flag */
+    unsigned long long      s_maxbytes;       /* max file size */
+    struct file_system_type s_type;           /* filesystem type */
+    struct super_operations s_op;             /* superblock methods */
+    struct dquot_operations *dq_op;           /* quota methods */
+    struct quotactl_ops     *s_qcop;          /* quota control methods */
+    struct export_operations *s_export_op;    /* export methods */
+    unsigned long            s_flags;         /* mount flags */
+    unsigned long            s_magic;         /* filesystem’s magic number */
+    struct dentry            *s_root;         /* directory mount point */
+    struct rw_semaphore      s_umount;        /* unmount semaphore */
+    struct semaphore         s_lock;          /* superblock semaphore */
+    int                      s_count;         /* superblock ref count */
+    int                      s_need_sync;     /* not-yet-synced flag */
+    atomic_t                 s_active;        /* active reference count */
+    void                     *s_security;     /* security module */
+    struct xattr_handler  **s_xattr;  /* extended attribute handlers */
+    struct list_head      s_inodes;        /* list of inodes */
+    struct list_head      s_dirty;         /* list of dirty inodes */
+    struct list_head      s_io;            /* list of writebacks */
+    struct list_head      s_more_io;       /* list of more writeback */
+    struct hlist_head     s_anon;          /* anonymous dentries */
+    struct list_head      s_files;         /* list of assigned files */
+    struct list_head      s_dentry_lru;    /* list of unused dentries */
+    int                   s_nr_dentry_unused; /* number of dentries on list */
+    struct block_device   *s_bdev;         /* associated block device */
+    struct mtd_info       *s_mtd;          /* memory disk information */
+    struct list_head      s_instances;     /* instances of this fs */
+    struct quota_info     s_dquot;         /* quota-specific options */
+    int                   s_frozen;        /* frozen status */
+    wait_queue_head_t     s_wait_unfrozen; /* wait queue on freeze */
+    char                  s_id[32];        /* text name */
+    void                  *s_fs_info;      /* filesystem-specific info */
+    fmode_t               s_mode;          /* mount permissions */
+    struct semaphore      s_vfs_rename_sem; /* rename semaphore */
+    u32                   s_time_gran;     /* granularity of timestamps */
+    char                  *s_subtype;      /* subtype name */
+    char                  *s_options;      /* saved mount options */
+};
+</code></pre>
+
+<h2 id="superblock操作函数">Superblock操作函数</h2>
+
+<p>superblock对象中最重要的成员是s_op指针，指向superblock_operations，superblock_operations在&lt;linux/fs.h&gt;中定义，下面仅包含部分的操作函数</p>
+
+<pre><code class="language-C">struct super_operations {
+    struct inode *(*alloc_inode)(struct super_block *sb);
+    void (*destroy_inode)(struct inode *);
+    void (*dirty_inode) (struct inode *);
+    int (*write_inode) (struct inode *, int);
+    void (*drop_inode) (struct inode *);
+    void (*delete_inode) (struct inode *);
+    void (*put_super) (struct super_block *);
+    void (*write_super) (struct super_block *);
+    int (*sync_fs)(struct super_block *sb, int wait);
+    int (*freeze_fs) (struct super_block *);
+    int (*unfreeze_fs) (struct super_block *);
+    int (*statfs) (struct dentry *, struct kstatfs *);
+    int (*remount_fs) (struct super_block *, int *, char *);
+    void (*clear_inode) (struct inode *);
+    void (*umount_begin) (struct super_block *);
+    int (*show_options)(struct seq_file *, struct vfsmount *);
+    int (*show_stats)(struct seq_file *, struct vfsmount *);
+    ssize_t (*quota_read)(struct super_block *, int, char *, size_t, loff_t);
+    ssize_t (*quota_write)(struct super_block *, int, const char *, size_t, loff_t);
+    int (*bdev_try_to_free_page)(struct super_block*, struct page*, gfp_t);
+};
+</code></pre>
+
+<p>这是一个函数表，每个指针都指向了一个对superlbock对象进行操作的函数（不含创建、删除superblock，这个是在fs/super.c中），这些操作函数对文件系统和它的inode执行low-level operations. 当文件系统想要调用某个方法时，比如写superblock，使用superblock的指针sb，调用方法为sb-&gt;s_op-&gt;write(sb).这里需要传入sb指针是因为C缺乏面向对象的特性（没有C++中的this指针），所以需要将sb作为参数传入。</p>
+
+<p>函数表中有的函数是可选的，即可以选择不实现，文件系统可以将指针置为NULL，对于置NULL的函数，VFS将调用一个通用函数或者什么都不做，取决于是什么函数。</p>
+
+<p>下面摘录了部分函数的说明，不一一翻译了</p>
+
+<p><strong>struct inode *(*alloc_inode)(struct super_block *sb)</strong>
+Creates and initializes a new inode object under the given superblock.</p>
+
+<p><strong>void (*destroy_inode)(struct inode *)</strong>
+Deallocates the given inode.</p>
+
+<p><strong>int (*write_inode) (struct inode *, int)</strong>
+Writes the given inode to disk</p>
+
+<p><strong>void (*delete_inode) (struct inode *)</strong>
+Deletes the given inode from the disk.</p>
+
+<p><strong>void (*put_super) (struct super_block *)</strong>
+Called by the VFS on unmount to release the given superblock object</p>
+
+<p><strong>void (*write_super) (struct super_block *)</strong>
+Updates the on-disk superblock with the specified superblock.</p>
+
+<p><strong>int (*sync_fs)(struct super_block *sb, int wait)</strong>
+Synchronizes filesystem metadata with the on-disk filesystem</p>
+
+<p><strong>int (*statfs) (struct dentry *, struct kstatfs *)</strong>
+Called by the VFS to obtain filesystem statistics</p>
+
+<p><strong>void (*clear_inode) (struct inode *)</strong>
+Called by the VFS to release the inode and clear any pages containing related data.</p>
+
+<p><strong>void (*umount_begin) (struct super_block *)</strong>
+Called by the VFS to interrupt a mount operation. It is used by network filesystems,
+such as NFS.</p>
+
+<h2 id="inode对象">Inode对象</h2>
+
+<p>Inode对象包含了内核操作一个文件或者目录需要的所有信息。对于Unix-style的文件系统，这些信息可以直接从磁盘中的inode读入，没有inode的文件系统需要根据磁盘上的数据动态生成inode的信息，并将这些信息填入内存中的inode对象</p>
+
+<p>Inode对象使用inode结构体来存储，该结构体定义在&lt;linux/fs.h&gt;中</p>
+
+<pre><code class="language-C">struct inode
+{
+    struct hlist_node       i_hash;              /* hash list */
+    struct list_head        i_list;              /* list of inodes */
+    struct list_head        i_sb_list;           /* list of superblocks */
+    struct list_head        i_dentry;            /* list of dentries */
+    unsigned long           i_ino;               /* inode number */
+    atomic_t                i_count;             /* reference counter */
+    unsigned int            i_nlink;             /* number of hard links */
+    uid_t                   i_uid;               /* user id of owner */
+    gid_t                   i_gid;               /* group id of owner */
+    kdev_t                  i_rdev;              /* real device node */
+    u64                     i_version;           /* versioning number */
+    loff_t                  i_size;              /* file size in bytes */
+    seqcount_t              i_size_seqcount;     /* serializer for i_size */
+    struct timespec         i_atime;             /* last access time */
+    struct timespec         i_mtime;             /* last modify time */
+    struct timespec         i_ctime;             /* last change time */
+    unsigned int            i_blkbits;           /* block size in bits */
+    blkcnt_t                i_blocks;            /* file size in blocks */
+    unsigned short          i_bytes;             /* bytes consumed */
+    umode_t                 i_mode;              /* access permissions */
+    spinlock_t              i_lock;              /* spinlock */
+    struct rw_semaphore     i_alloc_sem;         /* nests inside of i_sem */
+    struct semaphore        i_sem;               /* inode semaphore */
+    struct inode_operations *i_op;               /* inode ops table */
+    struct file_operations  *i_fop;              /* default inode ops */
+    struct super_block      *i_sb;               /* associated superblock */
+    struct file_lock  *i_flock;            /* file lock list */
+    struct address_space    *i_mapping;          /* associated mapping */
+    struct address_space    i_data;              /* mapping for device */
+    struct dquot            *i_dquot[MAXQUOTAS]; /* disk quotas for inode */
+    struct list_head        i_devices;           /* list of block devices */
+    union
+    {
+        struct pipe_inode_info  *i_pipe;         /* pipe information */
+        struct block_device     *i_bdev;         /* block device driver */
+        struct cdev             *i_cdev;         /* character device driver */
+    };
+    unsigned long           i_dnotify_mask;      /* directory notify mask */
+    struct dnotify_struct   *i_dnotify;          /* dnotify */
+    struct list_head        inotify_watches;     /* inotify watches */
+    struct mutex  inotify_mutex;  /* protects inotify_watches */
+    unsigned long           i_state;             /* state flags */
+    unsigned long           dirtied_when;        /* first dirtying time */
+    unsigned int            i_flags;             /* filesystem flags */
+    atomic_t                i_writecount;        /* count of writers */
+    void                    *i_security;         /* security module */
+    void                    *i_private;          /* fs private pointer */
+};
+
+</code></pre>
+
+<p>文件系统中的每个文件都可以用一个inode对象来表示，但是inode对象只有在文件被访问时才会在内存中构建。inode对象中一些域是和特殊文件相关的，比如i_pipe指向named pipe数据结构，i_bdev指向了block device数据结构，i_cdev指向character device数据结构，这三个指针存储在了union中，因为一个给定的inode最多指向这三个数据结构中的0个或者1个。
+文件系统可能无法支持inode对象中的一些属性，比如有些文件系统没有access timestamp。这种情况下，文件系统可以自己决定怎么如实现这些特性（比如讲timestamp置为0）</p>
+
+<h2 id="inode操作函数">Inode操作函数</h2>
+
+<p>inode中的i_op指针指向操作inode的函数表，该函数表定义在&lt;linux/fs.h&gt;中</p>
+
+<pre><code class="language-C">struct inode_operations
+{
+
+    int (*create) (struct inode *,struct dentry *,int, struct nameidata *);
+    struct dentry * (*lookup) (struct inode *,struct dentry *, struct nameidata *);
+    int (*link) (struct dentry *,struct inode *,struct dentry *);
+    int (*unlink) (struct inode *,struct dentry *);
+    int (*symlink) (struct inode *,struct dentry *,const char *);
+    int (*mkdir) (struct inode *,struct dentry *,int);
+    int (*rmdir) (struct inode *,struct dentry *);
+    int (*mknod) (struct inode *,struct dentry *,int,dev_t);
+    int (*rename) (struct inode *, struct dentry *,
+                   struct inode *, struct dentry *);
+    int (*readlink) (struct dentry *, char __user *,int);
+    void * (*follow_link) (struct dentry *, struct nameidata *);
+    void (*put_link) (struct dentry *, struct nameidata *, void *);
+    void (*truncate) (struct inode *);
+    int (*permission) (struct inode *, int);
+    int (*setattr) (struct dentry *, struct iattr *);
+    int (*getattr) (struct vfsmount *mnt, struct dentry *, struct kstat *);
+    int (*setxattr) (struct dentry *, const char *,const void *,size_t,int);
+    ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
+    ssize_t (*listxattr) (struct dentry *, char *, size_t);
+    int (*removexattr) (struct dentry *, const char *);
+    void (*truncate_range)(struct inode *, loff_t, loff_t);
+    long (*fallocate)(struct inode *inode, int mode, loff_t offset,
+                      loff_t len);
+    int (*fiemap)(struct inode *, struct fiemap_extent_info *, u64 start,
+    u64 len);
+};
+</code></pre>
+
+<p>下面摘录了部分函数的说明</p>
+
+<p><strong>int create(struct inode *dir, struct dentry *dentry, int mode)</strong>
+ The VFS calls this function from the creat() and open() system calls to create a new inode associated with the given dentry object with the specified initial access mode.</p>
+
+<p><strong>struct dentry* lookup(struct inode *dir, struct dentry *dentry)</strong>
+This function searches a directory for an inode corresponding to a filename specified in the given dentry.</p>
+
+<p><strong>int link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry)</strong>
+Invoked by the link() system call to create a hard link of the file old_dentry in the directory dir with the new filename dentry.</p>
+
+<p><strong>int unlink(struct inode *dir, struct dentry *dentry)</strong>
+Called from the unlink() system call to remove the inode specified by the directory entry dentry from the directory dir.</p>
+
+<p><strong>int follow_link(struct dentry *dentry, struct nameidata *nd)</strong>
+Called by the VFS to translate a symbolic link to the inode to which it points.</p>
+
+<p><strong>int permission(struct inode *inode, int mask)</strong>
+Checks whether the specified access mode is allowed for the file referenced by inode</p>
+
+<h2 id="dentry对象">Dentry对象</h2>
+
+<p>dentry是directory entry的简称，dentry是路径上具体的一个组件，一个路径上的每一个组件都是一个dentry，如路径/bin/vi.txt中，共有3个dentry，分别是 /， bin， vi.txt。</p>
+
+<p>dentry对象使用dentry结构体来表示，该结构体定义在&lt;linux/dcache.h&gt;中</p>
+
+<pre><code class="language-C">struct dentry
+{
+    atomic_t                 d_count;      /* usage count */
+    unsigned int             d_flags;      /* dentry flags */
+    spinlock_t               d_lock;       /* per-dentry lock */
+    int                      d_mounted;    /* is this a mount point? */
+    struct inode             *d_inode;     /* associated inode */
+    struct hlist_node        d_hash;       /* list of hash table entries */
+    struct dentry            *d_parent;    /* dentry object of parent */
+    struct qstr              d_name;       /* dentry name */
+    struct list_head         d_lru;        /* unused list */
+    union
+    {
+        struct list_head     d_child;      /* list of dentries within */
+        struct rcu_head      d_rcu;        /* RCU locking */
+    } d_u;
+    struct list_head         d_subdirs;    /* subdirectories */
+    struct list_head         d_alias;  /* list of alias inodes */
+    unsigned long            d_time;       /* revalidate time */
+    struct dentry_operations *d_op;        /* dentry operations table */
+    struct super_block       *d_sb;        /* superblock of file */
+    void                     *d_fsdata;    /* filesystem-specific data */
+    unsigned char            d_iname[DNAME_INLINE_LEN_MIN]; /* short name */
+};
+</code></pre>
+
+<p>因为dentry对象没有在磁盘上的物理存储，所以denty结构体中没有用于标记对象是否被修改的域（即不需要判断对象是否dirty，从而需要写回磁盘）</p>
+
+<h3 id="dentry的状态">Dentry的状态</h3>
+
+<p>dentry分为三种状态，user, unused, negative</p>
+
+<p><strong>used:</strong>
+该dentry对应一个有效的inode(dentry的d_inode域指向一个有效的inode)，并且d_count是正数，即有一个或者多个用户正在使用该dentry</p>
+
+<p><strong>unused:</strong>
+该dentry对应一个有效的inode(dentry的d_inode域指向一个有效的inode)，并且d_count为0，即VFS并没有使用该dentry，因为该dentry仍然指向一个有效的inode对象，dentry当前被保存在dentry cache中（等待可能再次被使用）</p>
+
+<p><strong>negtive:</strong>
+该dentry没有对应一个有效的inode（dentry的d_inode为NULL），这种情况可能是因为对应的inode对象被销毁了或者是查找的路径名称不对。此时dentry仍然被保存在cache中，这样下次路径查找可以快速进行（直接从dentry cache中获得）</p>
+
+<h3 id="dentry-cache">Dentry Cache</h3>
+
+<p>dentry cache的机制由三个部分组成</p>
+
+<ul>
+<li>used dentry 双向链表：每个inode对象都有一个i_dentry域，这是一个双向链表，用于保存该inode对应的dentry对象（一个inode可以有很多个dentry对象）</li>
+<li>least recently used双向链表：存储unused和negative状态的dentry对象。该链表按照lru的顺序存储，尾部的是最not lru的对象，当需要删除dentry来释放空间时，从链表的尾部删除对象。</li>
+<li>哈希表和哈希函数：哈希表存储路径和dentry的映射关系，哈希表使用dentry_hanshtable数组来存储，数组中每个元素都指向一个由哈希值相同的dentry组成的链表。哈希函数根据路径计算哈希值。具体的哈希计算方法由detry的操作函数d_hash()来决定，文件系统可以自己实现这个函数。</li>
+</ul>
+
+<p>dentry存储在cache中时，dentry的存在导致对应的inode的使用计数大于0，这样dentry对象可以将inode钉在内存中，只要dentry被cache了，那么对应的inode就一定也被cache了（使用的是inode cache，即icache），所以当路径查找函数在dentry cache中命中时，其对应的inode一定也在内存中。</p>
+
+<h2 id="dentry操作函数">Dentry操作函数</h2>
+
+<p>dentry结构体中的d_op指针指向操作dentry的函数表，函数表定义在&lt;linux/dcache.h&gt;中</p>
+
+<pre><code>struct dentry_operations
+{
+    int (*d_revalidate) (struct dentry *, struct nameidata *);
+    int (*d_hash) (struct dentry *, struct qstr *);
+    int (*d_compare) (struct dentry *, struct qstr *, struct qstr *);
+    int (*d_delete) (struct dentry *);
+    void (*d_release) (struct dentry *);
+    void (*d_iput) (struct dentry *, struct inode *);
+    char *(*d_dname) (struct dentry *, char *, int);
+};
+</code></pre>
+
+<p>下面摘录了部分函数的说明</p>
+
+<p><strong>int d_revalidate(struct dentry *dentry, struct nameidata *)</strong>
+Determines whether the given dentry object is valid.The VFS calls this function whenever it is preparing to use a dentry from the dcache. Most filesystems set this method to NULL because their dentry objects in the dcache are always valid.</p>
+
+<p><strong>int d_hash(struct dentry *dentry, struct qstr *name)</strong>
+Creates a hash value from the given dentry.</p>
+
+<p><strong>int d_compare(struct dentry *dentry, struct qstr *name1, struct qstr *name2)</strong>
+Called by the VFS to compare two filenames, name1 and name2. Most filesystems leave this at the VFS default, which is a simple string compare</p>
+
+<p><strong>int d_delete (struct dentry *dentry)</strong>
+Called by the VFS when the specified dentry object’s d_count reaches zero.This function requires the dcache_lock and the dentry’s d_lock.</p>
+
+<p><strong>void d_release(struct dentry *dentry)</strong>
+Called by the VFS when the specified dentry is going to be freed.The default function does nothing.</p>
+
+<p><strong>void d_iput(struct dentry *dentry, struct inode *inode)</strong>
+Called by the VFS when a dentry object loses its associated inode (say, because the entry was deleted from the disk). By default, the VFS simply calls the iput() function to release the inode.</p>
+
+<h2 id="file对象">File对象</h2>
+
+<p>File对象是打开的文件在内存中的表示（representation），用于在进程中表示打开的文件。进程和file对象直接进行交互，不会解除superblocks，inodes，dentrys。多个进程可以同时打开同一个文件，所以一个文件在内存中可以对应多个file对象。而inode和dentry在内存中只有唯一的对应。</p>
+
+<p>File对象使用file结构体来表示，定义在&lt;linux/fs.h&gt;中</p>
+
+<pre><code class="language-C">struct file
+{
+    union
+    {
+        struct list_head   fu_list;       /* list of file objects */
+        struct rcu_head    fu_rcuhead;    /* RCU list after freeing */
+    } f_u;
+    struct path            f_path;        /* contains the dentry */
+    struct file_operations *f_op;         /* file operations table */
+    spinlock_t             f_lock;        /* per-file struct lock */
+    atomic_t               f_count;       /* file object’s usage count */
+    unsigned int           f_flags;       /* flags specified on open */
+    mode_t                 f_mode;        /* file access mode */
+    loff_t                 f_pos;         /* file offset (file pointer) */
+    struct fown_struct     f_owner;       /* owner data for signals */
+    const struct cred      *f_cred;       /* file credentials */
+    struct file_ra_state   f_ra;  /* read-ahead state */
+    u64                    f_version;     /* version number */
+    void                   *f_security;   /* security module */
+    void                   *private_data; /* tty driver hook */
+    struct list_head       f_ep_links;    /* list of epoll links */
+    spinlock_t             f_ep_lock;     /* epoll lock */
+    struct address_space   *f_mapping;    /* page cache mapping */
+    unsigned long          f_mnt_write_state; /* debugging state */
+};
+</code></pre>
+
+<p>和dentry对象类似，file对象在磁盘上也没有对应的存储，所以在file对象也没有flag表示file是否dirty。file对象通过指针f_dentry指向对应的dentry对象，dentry对象指向对应的inode，inode中存储了文件本身是否dirty的信息。</p>
+
+<h2 id="file操作函数">File操作函数</h2>
+
+<p>file结构体中的f_op指针指向操作file的函数表，函数表定义在&lt;linux/fs.h&gt;中</p>
+
+<pre><code class="language-C">struct file_operations
+{
+    struct module *owner;
+    loff_t (*llseek) (struct file *, loff_t, int);
+    ssize_t (*read) (struct file *, char __user *, size_t, loff_t *);
+    ssize_t (*write) (struct file *, const char __user *, size_t, loff_t *);
+    ssize_t (*aio_read) (struct kiocb *, const struct iovec *,
+                         unsigned long, loff_t);
+    ssize_t (*aio_write) (struct kiocb *, const struct iovec *,
+                          unsigned long, loff_t);
+    int (*readdir) (struct file *, void *, filldir_t);
+    unsigned int (*poll) (struct file *, struct poll_table_struct *);
+    int (*ioctl) (struct inode *, struct file *, unsigned int,
+                  unsigned long);
+    long (*unlocked_ioctl) (struct file *, unsigned int, unsigned long);
+    long (*compat_ioctl) (struct file *, unsigned int, unsigned long);
+    int (*mmap) (struct file *, struct vm_area_struct *);
+    int (*open) (struct inode *, struct file *);
+    int (*flush) (struct file *, fl_owner_t id);
+    int (*release) (struct inode *, struct file *);
+    int (*fsync) (struct file *, struct dentry *, int datasync);
+    int (*aio_fsync) (struct kiocb *, int datasync);
+    int (*fasync) (int, struct file *, int);
+    int (*lock) (struct file *, int, struct file_lock *);
+    ssize_t (*sendpage) (struct file *, struct page *,
+                         int, size_t, loff_t *, int);
+    unsigned long (*get_unmapped_area) (struct file *,
+                                        unsigned long,
+                                        unsigned long,
+                                        unsigned long,
+                                        unsigned long);
+    int (*check_flags) (int);
+    int (*flock) (struct file *, int, struct file_lock *);
+    ssize_t (*splice_write) (struct pipe_inode_info *,
+                             struct file *,
+                             loff_t *,
+                             size_t,
+                             unsigned int);
+    ssize_t (*splice_read) (struct file *,
+                            loff_t *,
+                            struct pipe_inode_info *,
+                            size_t,
+                            unsigned int);
+    int (*setlease) (struct file *, long, struct file_lock **);
+｝
+</code></pre>
+
+<p>文件系统可以实现自己的file操作函数，也可以使用file的通用操作函数。通用操作函数一般可以在标准的基于Unix的文件系统中正常工作。</p>
+
+<p>下面摘录了部分函数的说明</p>
+
+<p><strong>int open(struct inode *inode, struct file *file)</strong>
+Creates a new file object and links it to the corresponding inode object. It is called by the open() system call.</p>
+
+<p><strong>loff_t llseek(struct file *file, loff_t offset, int origin)</strong>
+Updates the file pointer to the given offset. It is called via the llseek() system call.</p>
+
+<p><strong>ssize_t read(struct file *file, char *buf, size_t count, loff_t *offset)</strong>
+Reads count bytes from the given file at position offset into buf.The file pointer is then updated.This function is called by the read() system call.</p>
+
+<p><strong>ssize_t aio_read(struct kiocb *iocb, char *buf, size_t count, loff_t offset)</strong>
+Begins an asynchronous read of count bytes into buf of the file described in iocb. This function is called by the aio_read() system call.</p>
+
+<p><strong>ssize_t write(struct file *file, const char *buf, size_t count, loff_t *offset)</strong>
+Writes count bytes from buf into the given file at position offset.The file pointer is then updated.This function is called by the write() system call.</p>
+
+<p><strong>int readdir(struct file *file, void *dirent, filldir_t filldir)</strong>
+Returns the next directory in a directory listing.This function is called by the readdir() system call.</p>
+
+<p><strong>unsigned int poll(struct file *file, struct poll_table_struct *poll_table)</strong>
+Sleeps, waiting for activity on the given file. It is called by the poll() system call.</p>
+
+<p><strong>int ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg)</strong>
+Sends a command and argument pair to a device. It is used when the file is an open device node.This function is called from the ioctl() system call. Callers must hold the BKL.</p>
+
+<p><strong>int mmap(struct file *file, struct vm_area_struct *vma)</strong>
+Memory maps the given file onto the given address space and is called by the mmap() system call.</p>
+
+<p><strong>int flush(struct file *file)</strong>
+Called by the VFS whenever the reference count of an open file decreases. Its purpose is filesystem-dependent.</p>
+
+<h2 id="和文件系统相关的数据结构">和文件系统相关的数据结构</h2>
+
+<p>内核使用两种数据结构来管理和文件系统相关的数据，file_system_type结构体用于表示文件系统类别。vfsmount结构体用于表示一个挂载的文件系统实例。</p>
+
+<h3 id="file-system-type">file_system_type</h3>
+
+<p>因为Linux支持那很多中文件系统，所以内核必须要有一个特殊的数据结构来描述每个文件系统的特性和行为，file_system_type结构体就是做这个的。</p>
+
+<p>file_system_type定义在&lt;linux/fs.h&gt;中</p>
+
+<pre><code class="language-C">struct file_system_type
+{
+    const char              *name;     /* filesystem’s name */
+    int                     fs_flags;  /* filesystem type flags */
+    struct super_block      *(*get_sb) (struct file_system_type *, int, char *, void *);
+    void                    (*kill_sb) (struct super_block *);
+    struct module           *owner;    /* module owning the filesystem */
+    struct file_system_type *next;     /* next file_system_type in list */
+    struct list_head        fs_supers; /* list of superblock objects */
+    struct lock_class_key   s_lock_key;
+    struct lock_class_key   s_umount_key;
+    struct lock_class_key   i_lock_key;
+    struct lock_class_key   i_mutex_key;
+    struct lock_class_key   i_mutex_dir_key;
+    struct lock_class_key   i_alloc_sem_key;
+};
+</code></pre>
+
+<p>其中get_sb()函数在文件系统加载的时候读取磁盘上的superblock，并使用读入的数据填充内存中的superblock对象。每种文件系统不管有多少个实例（哪怕是0个），都会有且只有一个file_system_type。</p>
+
+<h3 id="vfsmount">vfsmount</h3>
+
+<p>vfsmount结构体在文件系统挂载时创建，该结构体表示一个具体的文件系统实例（挂载点）</p>
+
+<p>下面是vfsmount结构体的定义，定义在&lt;linux/mount.h&gt;中</p>
+
+<pre><code class="language-C">struct vfsmount
+{
+    struct list_head   mnt_hash;        /* hash table list */
+    struct vfsmount    *mnt_parent;     /* parent filesystem */
+    struct dentry      *mnt_mountpoint; /* dentry of this mount point */
+    struct dentry      *mnt_root;       /* dentry of root of this fs */
+    struct super_block *mnt_sb;         /* superblock of this filesystem */
+    struct list_head   mnt_mounts;      /* list of children */
+    struct list_head   mnt_child;       /* list of children */
+    int                mnt_flags;       /* mount flags */
+    char               *mnt_devname;    /* device file name */
+    struct list_head   mnt_list;        /* list of descriptors */
+    struct list_head   mnt_expire;      /* entry in expiry list */
+    struct list_head   mnt_share;       /* entry in shared mounts list */
+    struct list_head   mnt_slave_list;  /* list of slave mounts */
+    struct list_head   mnt_slave;       /* entry in slave list */
+    struct vfsmount    *mnt_master;     /* slave’s master */
+    struct mnt_namespace *mnt_namespace; /* associated namespace */
+    int                mnt_id;           /* mount identifier */
+    int                mnt_group_id;     /* peer group identifier */
+    atomic_t           mnt_count;        /* usage count */
+    int                mnt_expiry_mark;  /* is marked for expiration */
+    int                mnt_pinned;       /* pinned count */
+    int                mnt_ghosts;       /* ghosts count */
+    atomic_t           __mnt_writers;    /* writers count */
+};
+</code></pre>
+
+<p>vfsmount中含有指向文件系统示例的superlbock对象的指针。</p>
+
+<h2 id="和进程相关的数据结构">和进程相关的数据结构</h2>
+
+<p>进程使用files_struct, fs_struct 和mnt_namesapce这三个数据结构来将进程和VFS层关联起来，记录已打开文件列表、进程的根文件系统、当前工作目录等信息。</p>
+
+<h3 id="file-struct">file_struct</h3>
+
+<p>进程描述符的files指针指向file_struct,该结构体定义在&lt;linux/fdtable.h&gt;中</p>
+
+<pre><code class="language-C">struct files_struct
+{
+    atomic_t               count;              /* usage count */
+    struct fdtable         *fdt;               /* pointer to other fd table */
+    struct fdtable         fdtab;              /* base fd table */
+    spinlock_t             file_lock;          /* per-file lock */
+    int  next_fd;  /* cache of next available fd */
+    struct embedded_fd_set close_on_exec_init; /* list of close-on-exec fds */
+    struct embedded_fd_set open_fds_init       /* list of open fds */
+    struct file            *fd_array[NR_OPEN_DEFAULT]; /* base files array */
+};
+</code></pre>
+
+<p>fd_array指向一个已打开文件的列表。fd_array[i]指向文件描述符为i的file对象。NR_OPEN_DEFAULT是一个常数，在64bit机器中是64.当打开的文件数超过这个常数值时，内核会创建一个新的fdtable，并使fdt指向这个新的fdtable结构体。</p>
+
+<h3 id="fs-struct">fs_struct</h3>
+
+<p>fs_struct结构体用于存储和进程相关的文件系统信息。进程描述符中的fs指针指向进程的fs_struct结构体</p>
+
+<p>fs_struct定义在 &lt;linux/fs_struct.h&gt;中</p>
+
+<pre><code class="language-C">struct fs_struct
+{
+    int         users;    /* user count */
+    rwlock_t    lock;     /* per-structure lock */
+    int         umask;    /* umask */
+    int         in_exec;  /* currently executing a file */
+    struct path root;     /* root directory */
+    struct path pwd;      /* current working directory */
+};
+</code></pre>
+
+<p>root保存了进程的根目录，pwd保存了进程的当前工作目录</p>
+
+<h3 id="mnt-namespace">mnt_namespace</h3>
+
+<p>mnt_namespace给了每个进程一个独立的文件系统视角。进程描述符中的mnt_namespace域指向进程的mnt_namespace结构体</p>
+
+<p>linux中默认是所有进程共享一个namespace的，只有当clone()时指定了CLONE_NEWS标志，才会创建一个新的namespace。</p>
+
+<p>mnt_namespace定义在&lt;linux/mnt_namespace.h&gt;</p>
+
+<pre><code class="language-C">struct mnt_namespace
+{
+    atomic_t            count; /* usage count */
+    struct vfsmount     *root; /* root directory */
+    struct list_head    list;  /* list of mount points */
+    wait_queue_head_t   poll;  /* polling waitqueue */
+    int                 event; /* event count */
+};
+</code></pre>
+
+<p>list是一个双向链表，该链表将所有组成该namespace的已挂载文件系统连接到一起。</p>
+
+<h2 id="参考资料">参考资料</h2>
+
+<p>《Linux Kernel Development 3rd Edition》</p>
+
+<p>《Understanding The Linux Kernel 3rd Edition》</p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/81d31574c9a0088e8ae0c304020b4b1c4f6b8fb9/">https://www.huliujia.com/blog/81d31574c9a0088e8ae0c304020b4b1c4f6b8fb9/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/bff01fecc6e590d3ff7101c34f4b3c8889272751/">VFS中的数据结构（superblock、dentry、inode、file）</a></li>
+        
+        <li><a href="/blog/f70756be368904eb2e2c463671d67fd5d0dd0b72/">Linux进程状态码总结</a></li>
+        
+        <li><a href="/blog/8a209e5005fd17ec570ced231e48fa4165fde3b7/">《C和C&#43;&#43;程序员面试秘笈》中存在的错误</a></li>
+        
+        <li><a href="/blog/dab47d7b495f721c94db0959b69585abd0016a49/">最小生成树(MST)：Prim算法与Kruskal算法</a></li>
+        
+        <li><a href="/blog/e06651c8dbbb668c7476bd922f78127a72f7eec3/">二叉树的遍历（先序遍历，中序遍历，后序遍历，层次遍历）</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/linux">Linux</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F">文件系统</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

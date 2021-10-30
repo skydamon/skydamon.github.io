@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Write on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/write/</link>
+    <description>Recent content in Write on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 30 Oct 2021 14:28:02 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/write/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>LevelDB源码解析(15) 写操作之MakeRoomForWrite</title>
+      <link>https://www.huliujia.com/blog/056e5fe63f/</link>
+      <pubDate>Sat, 30 Oct 2021 14:28:02 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/056e5fe63f/</guid>
+      <description>背景 LevelDB每次写入key-value都是写入到内存中的Memtable中的，但是Memtable的空间不是无限的，Memtable写满后，就需要调用MakeRoomForWrite把Memtable转存为Immutable Memtable，并创建新</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(14) 写操作之Write主流程</title>
+      <link>https://www.huliujia.com/blog/24af576aa3/</link>
+      <pubDate>Thu, 28 Oct 2021 09:07:39 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/24af576aa3/</guid>
+      <description>leveldb对外提供的写入接口是Put，Put的实现如下： Status DB::Put(const WriteOptions &amp;amp;opt, const Slice &amp;amp;key, const Slice &amp;amp;value) { WriteBatch batch; batch.Put(key, value); return Write(opt, &amp;amp;batch); } WriteBatch是一个比较简单的类，只有一个string类型的成员变量rep_。提供了插入、删除、遍历等操作，详细实现可以参考LevelDB源码解析(5)</description>
+    </item>
+    
+  </channel>
+</rss>

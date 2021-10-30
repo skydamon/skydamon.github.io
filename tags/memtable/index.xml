@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Memtable on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/tags/memtable/</link>
+    <description>Recent content in Memtable on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sat, 30 Oct 2021 14:28:02 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/tags/memtable/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>LevelDB源码解析(15) 写操作之MakeRoomForWrite</title>
+      <link>https://www.huliujia.com/blog/056e5fe63f/</link>
+      <pubDate>Sat, 30 Oct 2021 14:28:02 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/056e5fe63f/</guid>
+      <description>背景 LevelDB每次写入key-value都是写入到内存中的Memtable中的，但是Memtable的空间不是无限的，Memtable写满后，就需要调用MakeRoomForWrite把Memtable转存为Immutable Memtable，并创建新</description>
+    </item>
+    
+    <item>
+      <title>LevelDB源码解析(12) Memtable落盘</title>
+      <link>https://www.huliujia.com/blog/124132a9b3/</link>
+      <pubDate>Wed, 06 Oct 2021 09:45:45 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/124132a9b3/</guid>
+      <description>背景 LevelDB源码解析(4) MemTable介绍了Memtable，LevelDB会先把key-value插入到MemTable中。如果MemTable写满了，就会新建一个MemTable进行写入。旧的Memtablex会落盘。一个Memtable会产</description>
+    </item>
+    
+  </channel>
+</rss>

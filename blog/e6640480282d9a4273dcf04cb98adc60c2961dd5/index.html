@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>LevelDB源码解析(1) Arena内存分配器 | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="LevelDB源码解析(1) Arena内存分配器 - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2021-03-09T08:56:50&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2021-03-09T08:56:50&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="LevelDB源码解析(1) Arena内存分配器">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/e6640480282d9a4273dcf04cb98adc60c2961dd5/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">LevelDB源码解析(1) Arena内存分配器</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2021年3月9日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h2 id="背景">背景</h2>
+
+<p>LevelDB中需要频繁申请和释放内存，如果直接使用系统的new/delete或者malloc/free接口申请和释放内存，会产生大量内存碎片，进而拖累系统的性能表现。所以LevelDB实现了一个Area内存分配器来对内存进行管理，以保证性能。</p>
+
+<h2 id="arena的核心思想">Arena的核心思想</h2>
+
+<p>LevelDB本身不再直接申请和释放内存，需要内存时，向Arena申请。内存释放由Arena负责，LevelDB不再关心内存释放问题。</p>
+
+<p>Arena从系统申请内存时是以固定大小（block_size) 整块申请的，LevelDB向Arena申请内存时，Arena按照LevelDB申请的内存大小(request_size)从已申请的内存块中分配，如果内存块中剩下的内存少于request_size，就不能直接分配了。此时分两种情况：如果requet_size 大于block_size的四分之一，Arena会申请一个request_size的内存返回给LevelDB。反之就申请一个block_size的内存块，然后从新的内存块中分配内存给LevelDB。</p>
+
+<p>四分之一策略，让小内存可以都从内存块中分配内存，而较大的内存申请从系统申请。避免了大量的小内存申请和释放，同时也保证了每个内存块被浪费的空间不会超过block_size/4。这里要理解内存浪费是不可避免的，比如如果把四分之一的阈值降低到百分之一，确实每个内存块浪费的空间会减少很多，但是也意味着很多小于block_size/4但是大于block_size/100的的小内存请求都从系统申请了，这就会造成本文开头所提到的内存碎片问题。所以四分之一的阈值其实是在空间浪费和内存碎片之间找的一个平衡点。</p>
+
+<p>如果request_size比block_size还大怎么办？此时，Arena会申请一个request_size大小的内存块，返回给LevelDB。</p>
+
+<p>Arena申请的内存什么时候释放呢？Arena申请的所有内存都是在Arena析构时一起释放的。LevelDB中每个MemTable对象都有一个Arena成员变量，MemTable是LevelDB在内存中的数据缓存结构，每个MemTable写满后就会落盘（写入磁盘），然后被销毁。Arena也会跟着一起析构。所以不用担心内存一直释放不了。</p>
+
+<h2 id="arena源码解析">Arena源码解析</h2>
+
+<blockquote>
+<p>注：本文使用的代码版本是是LevelDB 1.22</p>
+</blockquote>
+
+<p>我们先看头文件arena.h</p>
+
+<pre><code class="language-C++">#include &lt;atomic&gt;
+#include &lt;cassert&gt;
+#include &lt;cstddef&gt;
+#include &lt;cstdint&gt;
+#include &lt;vector&gt;
+
+namespace leveldb
+{
+  class Arena
+  {
+  public:
+    Arena();
+
+    Arena(const Arena&amp;) = delete;
+
+    Arena&amp; operator=(const Arena&amp;) = delete;
+
+    ~Arena();
+
+    char* Allocate(size_t bytes);
+
+    char* AllocateAligned(size_t bytes);
+
+    size_t MemoryUsage() const
+    {
+      return memory_usage_.load(std::memory_order_relaxed);
+    }
+
+  private:
+    char* AllocateFallback(size_t bytes);
+
+    char* AllocateNewBlock(size_t block_bytes);
+
+    char* alloc_ptr_;
+    size_t alloc_bytes_remaining_;
+
+    std::vector&lt;char*&gt; blocks_;
+
+    std::atomic&lt;size_t&gt; memory_usage_;
+  };
+
+  inline char* Arena::Allocate(size_t bytes)
+  {
+    assert(bytes &gt; 0);
+    if( bytes &lt;= alloc_bytes_remaining_ )
+    {
+      char* result = alloc_ptr_;
+      alloc_ptr_ += bytes;
+      alloc_bytes_remaining_ -= bytes;
+      return result;
+    }
+    return AllocateFallback(bytes);
+  }
+}
+</code></pre>
+
+<p>Arena的接口很简单，除了构造/析构函数，对外接口实际上只有三个：Allocate，AllocateAligned，MemoryUsage，内部私有接口有两个AllocateFallback和AllocateFallback，有4个私有成员变量</p>
+
+<h3 id="成员变量">成员变量</h3>
+
+<p><strong>alloc<em>ptr</em></strong> 指向当前可分配的内存块空闲空间的头部。
+<strong>alloc_bytes<em>remaining</em></strong> 存储当前内存空空闲空间的大小
+<strong>blocks_</strong> 是一个数组，保存了所有已分配内存块的指针
+<strong>memory<em>usage</em></strong> 保存Arena占用的总内存大小</p>
+
+<h3 id="allocate函数">Allocate函数</h3>
+
+<p>Allcate是Arena提供给外部用于申请内存的接口，参数只有一个bytes，代表想要申请的内存大小。</p>
+
+<p>Allocate函数是内联函数，不了解内联函数的同学可以看一下<a href="https://www.huliujia.com/blog/4e4824434d272ec7be2bcf85c04cb2e57be3690e/">内联函数(inline Function)浅析</a>，函数的实现体如下：</p>
+
+<pre><code class="language-C++">inline char* Arena::Allocate(size_t bytes)
+{
+  assert(bytes &gt; 0);
+  if( bytes &lt;= alloc_bytes_remaining_ )
+  {
+    char* result = alloc_ptr_;
+    alloc_ptr_ += bytes;
+    alloc_bytes_remaining_ -= bytes;
+    return result;
+  }
+  return AllocateFallback(bytes);
+}
+</code></pre>
+
+<p>Allocate先检查当前内存块的空闲内存是否足够，如果足够就直接从当前内存块分配，如果不足，就调用AllocateFallback来分配内存。AllocateFallback顾名思义，就是在空闲内存不足时的应变分配计划。</p>
+
+<p>如果是直接从当前内存块分配，Arena会从当前空闲内存的头部划出bytes的空间返回给调用方，并把alloc_ptr_指向新的空闲内存头部。并把alloc_bytes_remaining_减去bytes。</p>
+
+<p>下面我们看一下AllocateFallback</p>
+
+<h3 id="allocatefallback函数">AllocateFallback函数</h3>
+
+<pre><code class="language-C++">char* Arena::AllocateFallback(size_t bytes)
+{
+  if( bytes &gt; kBlockSize / 4 )
+  {
+    char* result = AllocateNewBlock(bytes);
+    return result;
+  }
+
+  alloc_ptr_ = AllocateNewBlock(kBlockSize);
+  alloc_bytes_remaining_ = kBlockSize;
+
+  char* result = alloc_ptr_;
+  alloc_ptr_ += bytes;
+  alloc_bytes_remaining_ -= bytes;
+  return result;
+}
+</code></pre>
+
+<p>AllocateFallback会先检查申请的bytes是否超过了内存块固定大小kBlockSize的四分之一，
+如果超过了就调用AllocateNewBlock直接分配一个bytes大小的内存块。如果没有超过，就调用AllocateNewBlock分配一个kBlockSize的新内存块。alloc_ptr_指向最新的内存块头部，并把alloc_bytes_remaining_置为kBlockSize。然后再从当前内存块分配内存并返回，分配逻辑和在Allocate中直接分配相同。</p>
+
+<p>可以看到，两种情况下AllocateFallback都会调用AllocateNewBlock来分配新的内存块，只是申请的大小和用途不太一样。</p>
+
+<h3 id="allocatenewblock函数">AllocateNewBlock函数</h3>
+
+<p>AllocateNewBlock函数的实现体如下所示</p>
+
+<pre><code class="language-C++">char* Arena::AllocateNewBlock(size_t block_bytes)
+{
+  char* result = new char[block_bytes];
+  blocks_.push_back(result);
+  memory_usage_.fetch_add(block_bytes + sizeof(char*), std::memory_order_relaxed);
+  return result;
+}
+</code></pre>
+
+<p>AllocateNewBlock的逻辑其实非常简单，首先申请一个size为block_bytes的内存块（这里使用了char数组来实现），然后把内存块的指针存入blocks_数组，然后把block_bytes + sizeof(char*)累加到memory_usage_，可以看到memory_usage_并不是分配的内存块大小，还包含了每个内存块的指针大小。最后AllocateNewBlock返回申请到的内存块指针。</p>
+
+<p>到这里就理清楚了Arena的Allocate分配内存的完整逻辑了，是不是还忘了点什么？</p>
+
+<p>对的，除了Allocate，Arena还提供了另外一个外部接口AllocateAligned。顾名思义，这个接口分配的内存是对齐的。内存对齐是为了减少CPU取数据的次数，提高性能，内存对齐又可以展开为一篇新的文章了，篇幅原因，这里就不赘述了。我们重点介绍AllocateAligned的实现。</p>
+
+<h3 id="allocatealigned函数">AllocateAligned函数</h3>
+
+<pre><code class="language-C++">char* Arena::AllocateAligned(size_t bytes)
+{
+  const int align = (sizeof(void*) &gt; 8) ? sizeof(void*) : 8;
+  static_assert((align &amp; (align - 1)) == 0, &quot;Pointer size should be a power of 2&quot;);
+  size_t current_mod = reinterpret_cast&lt;uintptr_t&gt;(alloc_ptr_) &amp; (align - 1);
+  size_t slop = (current_mod == 0 ? 0 : align - current_mod);
+  size_t needed = bytes + slop;
+  char* result;
+  if( needed &lt;= alloc_bytes_remaining_ )
+  {
+    result = alloc_ptr_ + slop;
+    alloc_ptr_ += needed;
+    alloc_bytes_remaining_ -= needed;
+  }else
+  {
+    result = AllocateFallback(bytes);
+  }
+  assert((reinterpret_cast&lt;uintptr_t&gt;(result) &amp; (align - 1)) == 0);
+  return result;
+}
+</code></pre>
+
+<ul>
+<li>Step1：判断当前的系统需要对齐多少字节，指针的size就代表了系统的对齐字节。如果对齐字节小于8，就把align设置为8，反之设置为系统的对齐字节。</li>
+<li>Step2：断言判断对齐字节数align是否为2的N次方，不是就出大问题了。。想想有一个31bit位的操作系统。这里用了一个比较tricky的方式，通过与操作来判断是否为2的N次方，避免了反复求余。</li>
+<li>Step3：计算当前空闲内存的首地址未对齐的字节数current_mod。因为align一定是2的n次方，所以其二进制形式肯定是1[0]*这种形式，即一个1，N个0。那么align-1二进制结果就是N个1了。alloc_ptr进行与运算后只保留了低N位的值，自然也就是为对齐的字节数了</li>
+<li>Step4：求需要补齐的字节数slop，如果current_mod为0，说明已经对齐了，不需要补字节，如果current_mod不为0，就需要补align-current_mode的字节数，这个很好理解。</li>
+<li>Step5：bytes+slop得到实际需要申请的内存数，即实际申请的内存数应当为原先申请的内存数+对齐补上的字节数。</li>
+<li>Step6：这里的分配逻辑就和Allocate里面一样了，如果需要内存needed小于等于当前空闲内存，就直接从当前内存块分配，只是首地址加上了对齐字节数的偏移量。这样分配的内存的首地址就是对齐了。</li>
+<li>Step7：如果剩余空闲内存不足，就调用AllocateFallback进行分配，AllocateFallback是直接从系统申请内存的，所以内存一定是对齐的（不然这个系统要着还有何用），这里可能会让有些同学比较困惑。既然系统分配的内存时对齐的，为什么前面的还需要进行对齐呢？假设现在有一个新的对齐的内存块，首地址为0x00，系统的对齐字节数为8，我们先从内存块分配了5个字节内存，显然这个内存的首地址是对齐的，此时alloc_ptr_的值变为了0x05。如果此时我们再从剩下的空闲内存中分配5个字节的内存，新分配的5字节的首地址就是0x05了，没有对齐，所以需要补上3个字节进行对齐，这样新分配的内存的首地址就变成了0x08，就对齐了。</li>
+<li>Step8：断言检查分配的内存首地址是否为2的整数倍</li>
+<li>Step9：返回分配的内存首地址。</li>
+</ul>
+
+<p>可以看到，在AllocateAligned中，使用了static_assert和assert，这个两个都是断言，有什么区别呢，感兴趣的同学可以移步<a href="https://www.huliujia.com/blog/f453c2a517ce997074a145325aef93abf2d91a67/">C/C++中的断言(assert与static_assert)</a></p>
+
+<h2 id="源码版本">源码版本</h2>
+
+<p><a href="https://github.com/google/leveldb/releases/tag/1.22">https://github.com/google/leveldb/releases/tag/1.22</a></p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/e6640480282d9a4273dcf04cb98adc60c2961dd5/">https://www.huliujia.com/blog/e6640480282d9a4273dcf04cb98adc60c2961dd5/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/f453c2a517ce997074a145325aef93abf2d91a67/">C/C&#43;&#43;中的断言(assert与static_assert)</a></li>
+        
+        <li><a href="/blog/f85f72a3b3e3018ffe9c9d3c15dda0f5db079859/">内存乱序与C&#43;&#43;内存模型详解</a></li>
+        
+        <li><a href="/blog/df3c2e8a9ef77bd2ed0d83292778734eb395970c/">聊一聊原子操作</a></li>
+        
+        <li><a href="/blog/e50b11b118cb08067469fa9c8af90aad3aa2f02e/">简易编译器实现（二）使用Bison创建语法分析器</a></li>
+        
+        <li><a href="/blog/7bdf23e1aadefa13286b73c3aa4063a5836b1a37/">简易编译器实现（一）使用Flex创建词法分析器</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/leveldb">LevelDB</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/arena">Arena</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98">内存</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

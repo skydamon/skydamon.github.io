@@ -1,0 +1,894 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>LevelDB源码解析(10) TableBuilder（Memtable序列化） | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="LevelDB源码解析(10) TableBuilder（Memtable序列化） - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2021-10-05T10:33:18&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2021-10-05T10:33:18&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="LevelDB源码解析(10) TableBuilder（Memtable序列化）">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/02ad8ac30a/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">LevelDB源码解析(10) TableBuilder（Memtable序列化）</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2021年10月5日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h2 id="背景">背景</h2>
+
+<p>在<a href="https://www.huliujia.com/blog/c5e8646cb4765da867b3936b2bae62843bded7e5/">LevelDB源码解析(4) MemTable</a>中我们介绍了Memtable，LevelDB会先把key-value插入到MemTable中。如果MemTable写满了，就会新建一个MemTable进行写入。旧的Memtable(也叫Immutable Memtable）会被转成一个SST(Sorted String Table)文件存储，转换过程是由TableBuilder完成的，Table指的就是Sroted String Table。</p>
+
+<h2 id="tablebuilder类定义">TableBuilder类定义</h2>
+
+<p>TableBuilder用于把Memtable转成SST文件存储，下面是TableBuilder的类定义:</p>
+
+<pre><code class="language-C++">//源码文件：table/table_builder.h
+class TableBuilder {
+    public:
+    TableBuilder(const Options&amp; options, WritableFile* file);
+    ~TableBuilder();
+
+    void Add(const Slice&amp; key, const Slice&amp; value);
+    void Flush();
+    Status Finish();
+    uint64_t FileSize() const;
+    Status status() const;
+    void Abandon();
+    uint64_t NumEntries() const;
+    Status ChangeOptions(const Options&amp; options);
+
+    private:
+    void WriteBlock(BlockBuilder* block, BlockHandle* handle);
+    void WriteRawBlock(const Slice&amp; data, CompressionType, BlockHandle* handle);
+    bool ok() const { return status().ok(); }
+
+    struct Rep;
+    Rep* rep_;
+};
+</code></pre>
+
+<p>只有一个Rep类型的成员变量rep_，所有的数据、状态都存放在Rep中。Rep是一个struct类型，作为数据容器存在。定义如下：</p>
+
+<pre><code class="language-C++">//源码文件：table/table_builder.h
+struct TableBuilder::Rep
+{
+  Rep(const Options&amp; opt, WritableFile* f);
+
+  Options options;
+  Options index_block_options;
+  WritableFile* file;
+  uint64_t offset;
+  Status status;
+  BlockBuilder data_block;
+  BlockBuilder index_block;
+  std::string last_key;
+  int64_t num_entries;
+  bool closed;
+  FilterBlockBuilder* filter_block;
+  bool pending_index_entry;
+  BlockHandle pending_handle;
+  std::string compressed_output;
+};
+</code></pre>
+
+<p>下面将分别介绍TableBuilder的关键成员函数，在介绍的过程中逐渐引入Rep的成员变量。</p>
+
+<h2 id="tablebuilder构造函数">TableBuilder构造函数</h2>
+
+<pre><code class="language-C++">//源码文件：table/table_builder.cc
+TableBuilder::TableBuilder(const Options&amp; options, WritableFile* file) : rep_(
+    new Rep(options, file))
+{
+  if( rep_-&gt;filter_block != nullptr )
+  {
+    rep_-&gt;filter_block-&gt;StartBlock(0);
+  }
+}
+</code></pre>
+
+<p>这里先构造rep_，就是给rep_的options和file赋值，然后把rep_的其他域初始化为默认值。然后初始化filter_block_(其实StartBlock啥也没做。。。）。filter_block_类型是<a href="https://www.huliujia.com/blog/1a8dbd0991/">FilterBlockBuilder</a>，用于构造filter block。</p>
+
+<h2 id="tablebuilder-writerawblock">TableBuilder::WriteRawBlock</h2>
+
+<p>WriteRawBlock把一段数据(raw block)写入文件中，并返回block在文件中的offset和size。</p>
+
+<pre><code class="language-C++">//源码文件：table/table_builder.cc
+void TableBuilder::WriteRawBlock(const Slice&amp; block_contents, CompressionType type,
+                                 BlockHandle* handle)
+{
+  Rep* r = rep_;
+
+  //Step1
+  handle-&gt;set_offset(r-&gt;offset);
+  handle-&gt;set_size(block_contents.size());
+
+  //Step2
+  r-&gt;status = r-&gt;file-&gt;Append(block_contents);
+
+  if( r-&gt;status.ok())
+  {
+    //Step3
+    char trailer[kBlockTrailerSize];
+    trailer[0] = type;
+    uint32_t crc = crc32c::Value(block_contents.data(), block_contents.size());
+    crc = crc32c::Extend(crc, trailer, 1);
+    EncodeFixed32(trailer + 1, crc32c::Mask(crc));
+
+    r-&gt;status = r-&gt;file-&gt;Append(Slice(trailer, kBlockTrailerSize));
+    if( r-&gt;status.ok())
+    {
+      //Step4
+      r-&gt;offset += block_contents.size() + kBlockTrailerSize;
+    }
+  }
+}
+</code></pre>
+
+<p>handle的类型BlockHandle只有两个成员变量，用于保存一个block在文件中的offset和size。</p>
+
+<pre><code class="language-C++">uint64_t offset_;
+uint64_t size_;
+</code></pre>
+
+<p><strong>Step1</strong>：把raw block的offset和size存入handle。</p>
+
+<p><strong>Step2</strong>：把raw block数据写入文件，WritableFile是一个文件操作的抽象类，用于兼容不用操作系统的文件IO接口。</p>
+
+<p><strong>Step3</strong>：生成trailer并写入文件，trailer总共5个字节，trailer[0]存储CompressionType，用于表示数据是否压缩及压缩类型。trailer[1-4]存储crc校验和，crc校验和是基于raw block的数据域和trailer域计算出来的。</p>
+
+<p><strong>Step4</strong>：把rep_的offset加上数据域size和trailer域size之和，表示文件当前已写入的总size。</p>
+
+<p>WriteRawBlock执行后，block的数据和trailer被写入了文件，handle存储了该block在文件中offset和size。</p>
+
+<h2 id="tablebuilder-writeblock">TableBuilder::WriteBlock</h2>
+
+<p>WriteBlock把一个block写入文件中，这里有别于WriteRawBlock，WriteBlock需要先对block做一下处理，然后调用WriteRawBlock完成写入。</p>
+
+<pre><code class="language-C++">//源码文件：table/table_builder.cc
+void TableBuilder::WriteBlock(BlockBuilder* block, BlockHandle* handle)
+{
+  assert(ok());
+  Rep* r = rep_;
+
+  //Step1
+  Slice raw = block-&gt;Finish();
+
+  //Step2
+  Slice block_contents;
+  CompressionType type = r-&gt;options.compression;
+  switch( type )
+  {
+    case kNoCompression:
+      block_contents = raw;
+      break;
+
+    case kSnappyCompression:
+    {
+      std::string* compressed = &amp;r-&gt;compressed_output;
+      if( port::Snappy_Compress(raw.data(), raw.size(), compressed) &amp;&amp;
+          compressed-&gt;size() &lt; raw.size() - (raw.size() / 8u))
+      {
+        block_contents = *compressed;
+      }else
+      {
+        block_contents = raw;
+        type = kNoCompression;
+      }
+      break;
+    }
+  }
+
+  //Step3
+  WriteRawBlock(block_contents, type, handle);
+  r-&gt;compressed_output.clear();
+  block-&gt;Reset();
+}
+</code></pre>
+
+<p><strong>Step1</strong>：调用<a href="https://www.huliujia.com/blog/6a7ee0401f/">BlockBuilder</a>的Finish完成block数据的最终构建，Finish会在尾部写入key的重启点列表，重启点是帮助多个key共用前缀的，以减少空间占用。详细逻辑请见<a href="https://www.huliujia.com/blog/6a7ee0401f/">LevelDB源码解析(8）BlockBuilder</a>。</p>
+
+<p><strong>Step2</strong>：根据是否压缩来决定是否对block的数据进行压缩，如果需要压缩就调用压缩算法压缩后放到block_contents中，反之直接把原始数据赋给block_contents，这里使用Slice作为载体，所以不会拷贝完整数据，开销不大。</p>
+
+<p><strong>Step3</strong>：调用WriteRawBlock把block数据写入文件，然后清空compressed_output和block。</p>
+
+<h2 id="tablebuilder-add">TableBuilder::Add</h2>
+
+<pre><code class="language-C++">//源码文件：table/table_builder.cc
+void TableBuilder::Add(const Slice &amp;key, const Slice &amp;value)
+{
+  Rep *r = rep_;
+  
+  //Step1
+  assert(!r-&gt;closed);
+  if ( !ok())
+  {
+    return;
+  }
+  if ( r-&gt;num_entries &gt; 0 )
+  {
+    assert(r-&gt;options.comparator-&gt;Compare(key, Slice(r-&gt;last_key)) &gt; 0);
+  }
+
+  //Step2
+  if ( r-&gt;pending_index_entry )
+  {
+    assert(r-&gt;data_block.empty());
+    r-&gt;options.comparator-&gt;FindShortestSeparator(&amp;r-&gt;last_key, key);
+
+    std::string handle_encoding;
+    r-&gt;pending_handle.EncodeTo(&amp;handle_encoding);
+    r-&gt;index_block.Add(r-&gt;last_key, Slice(handle_encoding));
+
+    r-&gt;pending_index_entry = false;
+  }
+
+  //Step3
+  if ( r-&gt;filter_block != nullptr )
+  {
+    r-&gt;filter_block-&gt;AddKey(key);
+  }
+
+  //Step4
+  r-&gt;last_key.assign(key.data(), key.size());
+  r-&gt;num_entries++;
+  r-&gt;data_block.Add(key, value);
+
+  //Step5
+  const size_t estimated_block_size = r-&gt;data_block.CurrentSizeEstimate();
+  if ( estimated_block_size &gt;= r-&gt;options.block_size )
+  {
+    Flush();
+  }
+}
+</code></pre>
+
+<p>这部分会涉及到data block、index entry、index block、filter block等概念，为了方便理解，这里简单说一下他们之间的关系，data block是key-value数据的block，一个data block包含成千上万(随便说的)个key-value数据。每个data block对应一个index_entry，所有index entry组成了index block。每个data block也对应一个filter block(比如BloomFilter)，不过一个filter block可能对应多个data block。</p>
+
+<p><strong>Step1</strong>：检查是否存在错误，以及检查本次Add的key是否大于last_key，TableBuilder只接受升序添加key，因为这个是为Memtable服务的，所以key必然是升序的。</p>
+
+<p><strong>Step2</strong>：每个data block完成后，会产生一个待写入的index entry，pending_index_entry表示是否有index_entry等待写入。如果有待写入的index etnry，就向index block中写入这个index_entry。写入逻辑如下：</p>
+
+<ul>
+<li><p><strong>Step2.1</strong>：先调用FindShortestSeparator，这个函数会比较last_key和key，找到短的str，使得last_key &lt; str &lt; key，并把last_key置为str（实际逻辑更复杂一些，但是核心思想就是这个）。主要目的是为了减少index entry占用的空间。</p></li>
+
+<li><p><strong>Step2.2</strong>：pending_handle是BlockHandle类型，存储了这个index entry对应的data block（即上一个data block）在文件中的offset和size。EncodeTo把offset和size编码到8字节的存储中。</p></li>
+
+<li><p><strong>Step2.3</strong>：调用index_block.Add添加index_entry，index_block和data_block复用了相同的类<a href="https://www.huliujia.com/blog/6a7ee0401f/">BlockBuilder</a>，BlockBuilder的Add其实是添加key-value用的，index_entry也被当做key-value来处理的，key就是last_key，value是pending_handler编码产生的8字节。</p></li>
+
+<li><p><strong>Step2.4</strong>: 把pending_index_entry置为false，因为没有待写入的index entry了。</p></li>
+</ul>
+
+<p><strong>Step3</strong>：把key加入到filter block中，filter block用于查找时快速判断key是否在当前data block中，如果filter block判断不在，就一定不在，只有filter block判断可能在时，才会进入data_block进行查找。详细内容请见<a href="https://www.huliujia.com/blog/1a8dbd0991/">LevelDB源码解析(9）FilterBlockBuilder</a></p>
+
+<p><strong>Step4</strong>：更新last_key，对于下次Add来说，last_key就是本次Add的key。num_entries表示当前data block中有多少个key-value，这里加1。然后执行data_block.Add把本次Add的key-value加入到data block中。data block会把数据序列化后放到自己的buffer中。详细内容请见<a href="https://www.huliujia.com/blog/6a7ee0401f/">LevelDB源码解析(8）BlockBuilder</a></p>
+
+<p><strong>Step5</strong>：如果data_block的size达到阈值（默认为4K），就调用Flush把data block的buffer数据写入文件，这个data block也就完成了，同时pending_index_entry被置为true，表示有一个index entry（即这个data block的index entry）等待写入。</p>
+
+<h2 id="tablebuilder-flush">TableBuilder::Flush</h2>
+
+<p>Flush完成一个data block的落盘，以及对应filter block和index entry的创建。</p>
+
+<pre><code class="language-C++">//源码文件：table/table_builder.cc
+void TableBuilder::Flush()
+{
+  Rep* r = rep_;
+  assert(!r-&gt;closed);
+  if( !ok())
+  {
+    return;
+  }
+  if( r-&gt;data_block.empty())
+  {
+    return;
+  }
+  assert(!r-&gt;pending_index_entry);
+  
+  //Step1
+  WriteBlock(&amp;r-&gt;data_block, &amp;r-&gt;pending_handle);
+  if( ok())
+  {
+    //Step2
+    r-&gt;pending_index_entry = true;
+    r-&gt;status = r-&gt;file-&gt;Flush();
+  }
+  if( r-&gt;filter_block != nullptr )
+  {
+    //Step3
+    r-&gt;filter_block-&gt;StartBlock(r-&gt;offset);
+  }
+}
+</code></pre>
+
+<p><strong>Step1</strong>：把data_block写入文件，并在pending_handle中保存offset和size，这个就是前面提到的index entry的value了。</p>
+
+<p><strong>Step2</strong>：把pending_index_entry置为true，并调用WritableFile::Flush把WritableFile内部的buffer写入磁盘(注意，不是Sync）</p>
+
+<p><strong>Step3</strong>：创建filter block，<a href="https://www.huliujia.com/blog/1a8dbd0991/">FilterBlockBuilder</a>每2KB创建一个filter block，所以会出现多个data block共用一个filter block的情况。但是一个data block最多对应一个BF。这种策略的好处是，当data block很小时，避免创建太多的filter。</p>
+
+<h2 id="tablebuilder-finish">TableBuilder::Finish</h2>
+
+<p>Finish是TableBuilder的终结者，调用Finish时，就会完成SST文件的全部构建。</p>
+
+<pre><code class="language-C++">//源码文件：table/table_builder.cc
+Status TableBuilder::Finish()
+{
+  Rep* r = rep_;
+
+  //Step1
+  Flush();
+  assert(!r-&gt;closed);
+
+  r-&gt;closed = true;
+
+  BlockHandle filter_block_handle, metaindex_block_handle, index_block_handle;
+
+  //Step2
+  if( ok() &amp;&amp; r-&gt;filter_block != nullptr )
+  {
+    WriteRawBlock(r-&gt;filter_block-&gt;Finish(), kNoCompression, &amp;filter_block_handle);
+  }
+
+  //Step3
+  if( ok())
+  {
+    BlockBuilder meta_index_block(&amp;r-&gt;options);
+    if( r-&gt;filter_block != nullptr )
+    {
+      std::string key = &quot;filter.&quot;;
+      key.append(r-&gt;options.filter_policy-&gt;Name());
+      std::string handle_encoding;
+      filter_block_handle.EncodeTo(&amp;handle_encoding);
+      meta_index_block.Add(key, handle_encoding);
+    }
+    WriteBlock(&amp;meta_index_block, &amp;metaindex_block_handle);
+  }
+
+  //Step4
+  if( ok())
+  {
+    if( r-&gt;pending_index_entry )
+    {
+      r-&gt;options.comparator-&gt;FindShortSuccessor(&amp;r-&gt;last_key);
+      std::string handle_encoding;
+      r-&gt;pending_handle.EncodeTo(&amp;handle_encoding);
+      r-&gt;index_block.Add(r-&gt;last_key, Slice(handle_encoding));
+      r-&gt;pending_index_entry = false;
+    }
+    WriteBlock(&amp;r-&gt;index_block, &amp;index_block_handle);
+  }
+
+  //Step5
+  if( ok())
+  {
+    Footer footer;
+    footer.set_metaindex_handle(metaindex_block_handle);
+    footer.set_index_handle(index_block_handle);
+    std::string footer_encoding;
+    footer.EncodeTo(&amp;footer_encoding);
+    r-&gt;status = r-&gt;file-&gt;Append(footer_encoding);
+    if( r-&gt;status.ok())
+    {
+      r-&gt;offset += footer_encoding.size();
+    }
+  }
+  return r-&gt;status;
+}
+</code></pre>
+
+<p><strong>Step1</strong>：调用Flush，把当前的data block落盘，并添加对应的index entry和filter</p>
+
+<p><strong>Step2</strong>：前面说过filter block复用了BlockBuilder，这里完成filter block的构建，并写入文件，逻辑和前面介绍的WriteBlock类似。</p>
+
+<p><strong>Step3</strong>：创建meta_index_block，同样复用BlockBuilder，里面只有一个key-value，key是filter.$Name，Name就是filter policy的名字，比如BloomFilter。value是filter block的offset和size的编码结果。随后把meta_index_block写入文件。metaindex_block_handle中存储了meta_index_block的offset和size。meta_index_block这个名字起得特别的不友好，这里应该叫filter_index_block更合适一些，即filter block的index。相应的，data block的index就是index_block。</p>
+
+<p><strong>Step4</strong>：如果有pending_index_entry就加入index block，逻辑和Add函数里添加index_entry类似，主要区别是找最短的最大key调用的是FindShortSuccessor，把last_key置为最短的比last_key大的string，也是为了节省空间。因为这是整个Memtable最后一个key了，所以新产生的key只需要大于last_key，不需要小于下一个key。最后调用WriteBlock把index block写入文件。index_block_handle中存储了index block的offset和size。</p>
+
+<p><strong>Step5</strong>：生成footer，并写入文件。Footer类有且只有两个BlockHandle成员变量，分别是metaindex_handle_和index_handle_，分别对应metaindex_block_handle和index_block_handle，分别赋值后，调用EncodeTo把footer编码到字符串中。编码格式如下表所示</p>
+
+<table>
+<thead>
+<tr>
+<th>8字节</th>
+<th>8字节</th>
+<th>8字节</th>
+<th>8字节</th>
+<th>8字节</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>metaindex block offset</td>
+<td>metaindex block size</td>
+<td>index block offset</td>
+<td>index block size</td>
+<td>魔数</td>
+</tr>
+</tbody>
+</table>
+
+<p>最后把footer写入文件，更新rep_的offset_，整个SST文件到这里就写完了。</p>
+
+<h2 id="总结">总结</h2>
+
+<p>最终TableBuilder产生的SST文件由5个区块组成，如下图所示。其中file index block就是代码里的metaindex block。这里为了直观一点，用filter index block的名字。</p>
+
+<p><img src="/images/leveldb_SST_简版格式.png" alt="leveldb_SST_简版格式" /></p>
+
+<p>详细的SST文件结构请见<a href="https://www.huliujia.com/blog/6974db6de9/">LevelDB源码解析(11) SST文件结构</a></p>
+
+<h2 id="源码版本">源码版本</h2>
+
+<p><a href="https://github.com/google/leveldb/releases/tag/1.22">https://github.com/google/leveldb/releases/tag/1.22</a></p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/02ad8ac30a/">https://www.huliujia.com/blog/02ad8ac30a/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/1a8dbd0991/">LevelDB源码解析(9) FilterBlockBuilder</a></li>
+        
+        <li><a href="/blog/6a7ee0401f/">LevelDB源码解析(8) BlockBuilder</a></li>
+        
+        <li><a href="/blog/e8d980b551/">LevelDB源码解析(7) 预写日志(WAL)</a></li>
+        
+        <li><a href="/blog/cc155a0319/">LevelDB源码解析(6) 写任务(WriterBatch)合并</a></li>
+        
+        <li><a href="/blog/3c240f2a7b/">LevelDB源码解析(5) WriteBatch</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/leveldb">LevelDB</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/tablebuilder">TableBuilder</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/sst">SST</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

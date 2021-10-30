@@ -1,0 +1,950 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>Linux内核学习笔记（二）内存管理 | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="Linux内核学习笔记（二）内存管理 - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2018-04-24T09:10:59&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2018-04-24T09:10:59&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="Linux内核学习笔记（二）内存管理">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/0b652a8747751273cc34800581e12835351e5ae1/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">Linux内核学习笔记（二）内存管理</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2018年4月24日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/linux">Linux</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h2 id="综述">综述</h2>
+
+<p>本文首先介绍和内存管理相关的一些概念如page，zone，然后介绍多种获得内存的方式，最后介绍Linux的slab层（slab分配器）。</p>
+
+<h2 id="页-page">页（page）</h2>
+
+<p>页是Linux内核进行内存管理的基本单元。MMU和虚拟内存也都使用页作为基本管理单元。不同的架构有不同的页大小，绝大部分的情况是32-bit使用4KB页大小，64-bit使用8KB页大小。这意味着如果一台机器的物理内存为1GB大小，大小为4KB，那么它的物理内存会被分为262144个页。</p>
+
+<p>页使用struct page数据结构来表示，定义在&lt;linux/mm_types.h&gt;中，下面是strut page的定义，省略了部分域</p>
+
+<pre><code class="language-C">struct page
+{
+    unsigned long flags;
+    atomic_t _count;
+    atomic_t _mapcount;
+    unsigned long private;
+    struct address_space *mapping;
+    pgoff_t index;
+    struct list_head lru;
+    void *virtual;
+}
+</code></pre>
+
+<ul>
+<li>flags域存储page的状态，比如page是否dirty，是否被锁在内存中。</li>
+<li>_count域存储该page的引用计数。count为负时表示该page未被使用，正数则表示该页正在被使用。一个页可能被page cache使用，也可能被page table映射，或者作为私有数据（被private指向），内核一般不会直接访问__count域，而是使用page_count()函数来获得，该函数在_count为负时会返回0。</li>
+<li>virtual域存储该page的虚拟地址，high memory（后面有介绍）不能永久地映射到内存的地址空间中，这种情况下virtual域将被置为NULL</li>
+</ul>
+
+<p>内核使用page结构体来管理物理内存中的所有page，内核需要知道一个page是否空闲（即page是否被分配出去了），如果page不是空闲的，那么内核需要知道page的所有者是谁。</p>
+
+<p>page结构体只表示物理内存的page，不是虚拟内存的page。一个虚拟page不同时间可能会对应不同的物理page，即使这个虚拟page存储的数据没有变化（swapping等原因造成的）。</p>
+
+<p>物理内存中的每一个page都会有一个对应的struct page实例，即有多少个页，在内存中就有多少个struct page实例，无论该page是否被使用。听起来是一个很大的内存开销，但是实际上并不大，比如一个有4GB物理内存的系统，使用8KB大小的page。那么总共需要524288个struct page实例，这总共需要20M的内存，相对于4GB的物理内存来说，开销其实很小。</p>
+
+<h2 id="区-zone">区（zone）</h2>
+
+<p>内核将这些page划分成具有不同各自特征的区（zone），不同区的页有着不同的特性。</p>
+
+<p>Linux主要有4种内存区</p>
+
+<ul>
+<li>ZONE_DMA  可以执行DMA操作的区域</li>
+<li>ZONE_DMA32 这个区域只能由32-bit的设备进行DMA操作</li>
+<li>ZONE_NORMAL 这个区域由能正常映射的页组成</li>
+<li>ZONE_HIGHMEM 这个区域由高端内存组成，高端内存的物理页不能永久映射到内核地址空间中</li>
+</ul>
+
+<p>不了解高端内存的话，可以看一下这篇博客<a href="https://blog.csdn.net/tommy_wxie/article/details/17122923">linux 用户空间与内核空间——高端内存详解</a>,作者写得很详细</p>
+
+<p>不同区的实际使用和布局是体系架构相关的 下表是在x86-32架构中不同区域的描述和大小。</p>
+
+<table>
+<thead>
+<tr>
+<th>区域</th>
+<th>地址范围（物理地址）</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>ZONE_DMA</td>
+<td>&lt;16MB</td>
+</tr>
+
+<tr>
+<td>ZONE_NORMAL</td>
+<td>16~896MB</td>
+</tr>
+
+<tr>
+<td>ZONE_HIGHMEM</td>
+<td>&gt; 896MB</td>
+</tr>
+</tbody>
+</table>
+
+<p>x86-64架构中，只有ZONE_DMA 和 ZONE_NORMAL两个区域</p>
+
+<p>内核使用strcut zone 来表示区域，该结构体定义在&lt;linux/mmzone.h&gt;中</p>
+
+<h2 id="分配物理页-physical-page">分配物理页(physical page)</h2>
+
+<p>内核在&lt;linux/gfp.h&gt;中定义了多个以页为单位进行内存分配的底层接口</p>
+
+<p><strong>分配页:</strong></p>
+
+<table>
+<thead>
+<tr>
+<th>函数接口</th>
+<th>功能描述</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>struct page * alloc_pages(gfp_t gfp_mask, unsigned int order)</td>
+<td>分配2^order个连续的物理页，返回指向第一个页的指针</td>
+</tr>
+
+<tr>
+<td>unsigned long __get_free_pages(gfp_t gfp_mask, unsigned int order)</td>
+<td>分配2^order个连续的物理页，返回第一个页的逻辑地址</td>
+</tr>
+
+<tr>
+<td>struct page * alloc_page(gfp_t gfp_mask)</td>
+<td>分配单个物理页，返回指向该页的指针</td>
+</tr>
+
+<tr>
+<td>unsigned long __get_free_page(gfp_t gfp_mask)</td>
+<td>分配单个物理爷，并返回该页的逻辑地址</td>
+</tr>
+
+<tr>
+<td>unsigned long get_zeroed_page(unsigned int gfp_mask)</td>
+<td>分配单个物理页，将页内容置为0，并返回该页的逻辑地址</td>
+</tr>
+</tbody>
+</table>
+
+<p>内核还提供了一个函数，用于将页指针转换为逻辑地址</p>
+
+<p>void * page_address(struct page *page)，传入参数为页指针，返回参数为逻辑地址。</p>
+
+<p><strong>释放页：</strong></p>
+
+<table>
+<thead>
+<tr>
+<th>函数接口</th>
+<th>功能描述</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>void __free_pages(struct page *page, unsigned int order)</td>
+<td>释放2^order个物理页，传入参数为指向第一个页的指针</td>
+</tr>
+
+<tr>
+<td>void free_pages(unsigned long addr, unsigned int order)</td>
+<td>释放2^order个物理页，传入参数为指向第一个页的逻辑地址</td>
+</tr>
+
+<tr>
+<td>void free_page(unsigned long addr)</td>
+<td>释放单个页，传入采纳数为指向第一个页的逻辑地址</td>
+</tr>
+</tbody>
+</table>
+
+<h2 id="kmalloc-分配指定大小的物理上连续的内存">kmalloc() 分配指定大小的物理上连续的内存</h2>
+
+<p>在&lt;linux/slab.h&gt;声明的kmalloc()函数和用户空间的malloc()类似，只是多了一个gfp_t类型的flag参数。
+void * kmalloc(size_t size, gfp_t flags)
+kmalloc返回一段连续的物理内存，大小至少为size，这里说至少是因为内核内存分配是以页为单位的，所以当size的大小不到n个页大小，但是又大于n-1个页大小时，内核会分配n个页的内存。返回地址是第一个页的逻辑地址。</p>
+
+<p>和kmalloc对应的释放内存的函数是void kfree(const void *ptr);</p>
+
+<h2 id="gfp-t-flags说明">gfp_t Flags说明</h2>
+
+<p>获取物理内存页的底层接口和kmalloc()函数中都包含了一个gfp_t类型的参数，gfp是get free page的缩写，这个参数由3种flag组成，分别为action modifier， zone modifier，type。</p>
+
+<h3 id="action-modifier">Action Modifier</h3>
+
+<p>actions modifier 规定了内核应该如何分配内存（比如中断处理程序获取内存时要求不能睡眠）
+下表是不同action modifier及其功能，就不一一翻译了</p>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>__GFP_WAIT</td>
+<td>The allocator can sleep.</td>
+</tr>
+
+<tr>
+<td>__GFP_HIGH</td>
+<td>The allocator can access emergency pools.</td>
+</tr>
+
+<tr>
+<td>__GFP_IO</td>
+<td>The allocator can start disk I/O.</td>
+</tr>
+
+<tr>
+<td>__GFP_FS</td>
+<td>The allocator can start filesystem I/O.</td>
+</tr>
+
+<tr>
+<td>__GFP_COLD</td>
+<td>The allocator should use cache cold pages.</td>
+</tr>
+
+<tr>
+<td>__GFP_NOWARN</td>
+<td>The allocator does not print failure warnings.</td>
+</tr>
+
+<tr>
+<td>__GFP_REPEAT</td>
+<td>The allocator repeats the allocation if it fails, but the allocation can potentially fail.</td>
+</tr>
+
+<tr>
+<td>__GFP_NOFAIL</td>
+<td>The allocator indefinitely repeats the allocation. The allocation cannot fail.</td>
+</tr>
+
+<tr>
+<td>__GFP_NORETRY</td>
+<td>The allocator never retries if the allocation fails.</td>
+</tr>
+
+<tr>
+<td>__GFP_NOMEMALLOC</td>
+<td>The allocator does not fall back on reserves.</td>
+</tr>
+
+<tr>
+<td>__GFP_HARDWALL</td>
+<td>The allocator enforces “hardwall” cpuset boundaries.</td>
+</tr>
+
+<tr>
+<td>__GFP_RECLAIMABLE</td>
+<td>The allocator marks the pages reclaimable.</td>
+</tr>
+
+<tr>
+<td>__GFP_COMP</td>
+<td>The allocator adds compound page metadata (used internally by the hugetlb code).</td>
+</tr>
+</tbody>
+</table>
+
+<p>不同的modifier可以通过或的方式合并使用，如ptr = kmalloc(size, __GFP_WAIT | __GFP_IO | __GFP_FS)；</p>
+
+<h3 id="zone-modifier">Zone Modifier</h3>
+
+<p>zone modifyer 规定了从哪个区域（zone）分配内存</p>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>__GFP_DMA</td>
+<td>Allocates only from ZONE_DMA</td>
+</tr>
+
+<tr>
+<td>__GFP_DMA32</td>
+<td>Allocates only from ZONE_DMA32</td>
+</tr>
+
+<tr>
+<td>__GFP_HIGHMEM</td>
+<td>Allocates from ZONE_HIGHMEM or ZONE_NORMAL</td>
+</tr>
+
+<tr>
+<td>未指定zone modifier</td>
+<td>默认从ZONE_DMA或者ZONE_NORMLA分配，会优先选择ZONE_NORMAL</td>
+</tr>
+</tbody>
+</table>
+
+<p>需要注意的是不能给__get_free_page()、 __get_free_pages()或者kmalloc()指定 __GFP_HIGHMEM，因为从高端内存中分配的页可能没有映射到到内核地址空间中，因此没有逻辑地址。不能返回一个有效的逻辑地址。</p>
+
+<h3 id="type-flags">Type Flags</h3>
+
+<p>type flags实际上是前两者的组合，是为了方便某些场合下规定特定的flags而设计的，简化了flags的指定，减少错误的发生。</p>
+
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Description</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>GFP_ATOMIC</td>
+<td>The allocation is high priority and must not sleep. This is the flag to use in interrupt handlers, in bottom halves, while holding a spinlock, and in other situations where you cannot sleep.</td>
+</tr>
+
+<tr>
+<td>GFP_NOWAIT</td>
+<td>Like GFP_ATOMIC, except that the call will not fallback on emergency memory pools. This increases the liklihood of the memory allocation failing.</td>
+</tr>
+
+<tr>
+<td>GFP_NOIO</td>
+<td>This allocation can block, but must not initiate disk I/O. This is the flag to use in block I/O code when you cannot cause more disk I/O, which might lead to some unpleasant recursion.</td>
+</tr>
+
+<tr>
+<td>GFP_NOFS</td>
+<td>This allocation can block and can initiate disk I/O, if it must, but it will not initiate a filesystem operation. This is the flag to use in filesystem code when you cannot start another filesystem operation.</td>
+</tr>
+
+<tr>
+<td>GFP_KERNEL</td>
+<td>This is a normal allocation and might block. This is the flag to use in process context code when it is safe to sleep. The kernel will do whatever it has to do to obtain the memory requested by the caller. This flag should be your default choice.</td>
+</tr>
+
+<tr>
+<td>GFP_USER</td>
+<td>This is a normal allocation and might block. This flag is used to allocate memory for user-space processes.</td>
+</tr>
+
+<tr>
+<td>GFP_HIGHUSER</td>
+<td>This is an allocation from ZONE_HIGHMEM and might block. This flag is used to allocate memory for user-space processes.</td>
+</tr>
+
+<tr>
+<td>GFP_DMA</td>
+<td>This is an allocation from ZONE_DMA. Device drivers that need DMA-able memory use this flag, usually in combination with one of the preceding flags.</td>
+</tr>
+</tbody>
+</table>
+
+<p>其中最常使用的是GFP_KERNEL、GFP_ATOMIC、GFP_DMA.</p>
+
+<ul>
+<li>GPF_KERNEL表明分配过程是可以阻塞的，进程可以进入睡眠状态，这种情况下分配成功率最高，因为内核可以进行内存的swap（在内存不足是将物理页的内容保存到磁盘上，释放内存空间）等操作。</li>
+<li>GPF_ATOMIC表明分配过程不能阻塞，进程不能进入睡眠状态，常见于中断处理程序中。因为进程不能被阻塞，所以内核无法进行内存swap等操作，成功率相对于GPF_KERNEL低一些。</li>
+<li>GFP_DMA表明这个内存将用于DMA操作，分配的内存必须要在ZONE_DMA区域中</li>
+</ul>
+
+<p>type flags一样可以通过或运算来进行参数组合，如(GPF_DMA| GPF_KERNLE)表明需要DMA_ZONE的内存，进程可以进入睡眠</p>
+
+<h2 id="vmalloc-分配指定大小的逻辑上连续的内存">vmalloc() 分配指定大小的逻辑上连续的内存</h2>
+
+<p>vmalloc()声明在&lt;linux/vmallo.h&gt;中：
+void * vmalloc(unsigned long size)</p>
+
+<p>vmalloc()分配指定大小的内存，这些内存在逻辑上是连续的，在物理上不一定来连续。因为这些页在物理上不一定连续，所以vmalloc()需要设置page table表，建立映射关系，使得这些内存在逻辑上是连续的。因为需要为每个页简历一个映射关系，会导致TLB更容易抖动，从而降低性能。因此内核中大部分情况下使用kmalloc()，vmalloc只有不得不用的时候才会使用（比如分配超大块的内存）。</p>
+
+<p>和vmalloc()对应的释放内存的函数为：
+void vfree(const void *addr);</p>
+
+<h2 id="slab层-slab分配器">Slab层（Slab分配器）</h2>
+
+<p>Slab层是linux内核提供的通用数据结构cache层，主要作用是为一些频繁分配和释放的数据结构（对象）建立对象缓存，当对象不再需要时，slab回收该对象，将其放在缓存中，而不是直接销毁。当程序申请新的对象时，直接从该对象的缓存中返回一个可用对象。而不是重新分配内存。</p>
+
+<p>Linux的slab层设计与实现遵循下面的原则：（不一一翻译了）：</p>
+
+<ul>
+<li>Frequently used data structures tend to be allocated and freed often, so cache them.</li>
+<li>Frequent allocation and deallocation can result in memory fragmentation (the inability to find large contiguous chunks of available memory).To prevent this, the cached free lists are arranged contiguously. Because freed data structures return to the free list, there is no resulting fragmentation.</li>
+<li>The free list provides improved performance during frequent allocation and deallo cation because a freed object can be immediately returned to the next allocation.</li>
+<li>If the allocator is aware of concepts such as object size, page size, and total cache size, it can make more intelligent decisions.</li>
+<li>If part of the cache is made per-processor (separate and unique to each processor on the system), allocations and frees can be performed without an SMP lock.</li>
+<li>If the allocator is NUMA-aware, it can fulfill allocations from the same memory node as the requestor.</li>
+<li>Stored objects can be colored to prevent multiple objects from mapping to the same cache lines.</li>
+</ul>
+
+<p>Slab层将对象按照类型分成不同的cache，每个cache中只包含一类对象，一种类型的对象只存在与一个特定的cache中。</p>
+
+<p>cahce被分为多个slab，slab由一个或者多个物理上连续的页组成（通常一个slab只有一个页）。</p>
+
+<p>每个slab包含一些对象（这些对象就是缓存的对象）</p>
+
+<p>简单来说cache由slab组成，slab由对象组成。</p>
+
+<p>每个slab都处于一下三种状态中的一个：</p>
+
+<ul>
+<li>full：没有空闲的对象，该slab中的对象都已经被分配出去了。</li>
+<li>partial：部分对象是空闲的，部分对象已被分配。</li>
+<li>empty：没有对象被分配，都是空闲的。</li>
+</ul>
+
+<p>当内核的某一个部分请求一个新的对象时，会优先从partial状态的slab中分配，如果没有partial状态的slab，就会从empty状态的slab中分配，如果也没有empty状态的slab，一个新的empty slab会被创建出来。</p>
+
+<p>cache对象使用struct kmem_cache表示，该结构体中包含3个链表，分别是slabs_full, slabs_partial和slabs_emtpy，分别存储3中状态的slab对象。</p>
+
+<p>slab对象使用struct slab来表示。</p>
+
+<pre><code class="language-C">struct slab {
+    struct list_head list; /* full, partial, or empty list */
+    unsigned long colouroff; /* offset for the slab coloring */
+    void *s_mem; /* first object in the slab */
+    unsigned int inuse; /* allocated objects in the slab */
+    kmem_bufctl_t free; /* first free object, if any */
+};
+</code></pre>
+
+<p>当需要分配一个新的对象，但是cache中没有partial状态slab，也没有empty状态的slab对象时，slab分配器通过函数static void *kmem_getpages(struct kmem_cache *cachep, gfp_t flags, int nodeid)来为cachep指向的cache创建一个新的empty slab。
+kmem_getpages将会调用__get_free_pages()来获得连续的物理内存页。</p>
+
+<p>当内存不足，并且系统试图释放内存时或者当cache被销毁时，slab分配器通过调用kmem_freepages(struct kmem_cache *cachep, void *addr)函数来释放cachep中的由逻辑地址参数addr指定的slab
+kmem_freepages()将会调用free_pages()来释放物理内存页。</p>
+
+<h2 id="slab分配器接口">Slab分配器接口</h2>
+
+<p>slab层为调用者提供了一组接口，通过该接口可以
+1) 创建某个类型对象的cache
+2) 销毁某个类型对象的cache
+3) 从cache中获得对象
+4) 将对象返还给cache</p>
+
+<p>通过这些接口，slab alloctor隐藏了内部实现（如寻找partial slab，创建新的slab，销毁empty slab），表现为为一个专用的对象分配器。</p>
+
+<p>下表列出了slab分配器提供的主要接口：</p>
+
+<table>
+<thead>
+<tr>
+<th>函数接口</th>
+<th>功能描述</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>struct kmem_cache * kmem_cache_create(const char *name, size_t size, size_t align, unsigned long flags, void (*ctor)(void *))</td>
+<td>创建一个cache对象，name是cache的名字，size是对象的大小,flags定义了对象的行为，比如是否要在ZONE_DMA中创建每个slab等。</td>
+</tr>
+
+<tr>
+<td>int kmem_cache_destroy(struct kmem_cache *cachep)</td>
+<td>销毁cachp指向的cache，调用者需要确保该cache中的slab都是空的</td>
+</tr>
+
+<tr>
+<td>void * kmem_cache_alloc(struct kmem_cache *cachep, gfp_t flags)</td>
+<td>从cache中获得一个可用的对象</td>
+</tr>
+
+<tr>
+<td>void kmem_cache_free(struct kmem_cache *cachep, void *objp)</td>
+<td>释放objp指向的对象，这将会使cachep中的objp被标记为空闲</td>
+</tr>
+</tbody>
+</table>
+
+<h2 id="参考资料">参考资料</h2>
+
+<p>《Linux Kernel Development 3rd Edition》</p>
+
+<p>《Understanding The Linux Kernel 3rd Edition》</p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/0b652a8747751273cc34800581e12835351e5ae1/">https://www.huliujia.com/blog/0b652a8747751273cc34800581e12835351e5ae1/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/81d31574c9a0088e8ae0c304020b4b1c4f6b8fb9/">Linux内核学习笔记（一）虚拟文件系统（VFS）</a></li>
+        
+        <li><a href="/blog/bff01fecc6e590d3ff7101c34f4b3c8889272751/">VFS中的数据结构（superblock、dentry、inode、file）</a></li>
+        
+        <li><a href="/blog/f70756be368904eb2e2c463671d67fd5d0dd0b72/">Linux进程状态码总结</a></li>
+        
+        <li><a href="/blog/8a209e5005fd17ec570ced231e48fa4165fde3b7/">《C和C&#43;&#43;程序员面试秘笈》中存在的错误</a></li>
+        
+        <li><a href="/blog/dab47d7b495f721c94db0959b69585abd0016a49/">最小生成树(MST)：Prim算法与Kruskal算法</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/linux">Linux</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86">内存管理</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

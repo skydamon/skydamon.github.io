@@ -1,0 +1,897 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>VFS中的数据结构（superblock、dentry、inode、file） | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="VFS中的数据结构（superblock、dentry、inode、file） - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2018-04-14T12:46:53&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2018-04-14T12:46:53&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="VFS中的数据结构（superblock、dentry、inode、file）">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/bff01fecc6e590d3ff7101c34f4b3c8889272751/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">VFS中的数据结构（superblock、dentry、inode、file）</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2018年4月14日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/linux">Linux</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h2 id="vfs简介">VFS简介</h2>
+
+<p>VFS的理念是使用统一的数据结构在内核中保存不同类型文件系统的信息（含操作）。</p>
+
+<p>VFS是一个介于用户程序和文件系统实现之间的一个抽象层，VFS既给了不同类型的文件系统支持Linux系统的公共接口，也给用户程序提供了一个统一的调用接口。</p>
+
+<p>VFS背后的核心idea是引入了通用文件模型（common file model），该模型其实就是Unix原生文件系统的一个镜像（这样可以在Unix原生文件系统了具有最小的开销，最高的性能）。其他非原生文件系统（比如FAT、MS-DOS filesystem）则需要做一些转换，从而支持该通用文件模型</p>
+
+<h2 id="通用文件模型-common-file-model">通用文件模型（common file model）</h2>
+
+<p>通用文件模型由superblock、inode、dentry、file四种数据结构构成，这四种数据结构都是保存在内核空间中的。</p>
+
+<ul>
+<li>superblock数据结构存储了挂载的文件系统的元信息，对于基于磁盘的文件系统，通常在磁盘上有一个对应的superblock（比如ext2的superblock）。</li>
+<li>inode数据结构用于保存文件的元信息，一个文件对应一个inode，每个inode都有一个inode number唯一标识。inode通常对应磁盘上保存的文件控制块（file control block）</li>
+<li>dentry数据结构用于将inode（表示文件）和目录项（表示文件路径）关联起来。inode中是没有文件路径的，所以需要dentry来讲文件路径和文件关联起来。不同的磁盘文件系统使用各自的方式来存储dentry</li>
+<li>file数据结构用于存储进程和打开的文件之间交互的信息，这个信息只会存在于内核空间中，在磁盘上没有对应的信息。</li>
+</ul>
+
+<p>下面将分别介绍这4种数据结构，所列举的信息使用的是2.6内核的数据。</p>
+
+<h3 id="superblock数据结构">superblock数据结构</h3>
+
+<p>superblock是文件系统的metadata，保存了文件系统的各种信息以及可以对其执行的操作。</p>
+
+<h4 id="包含的域-仅列举部分">包含的域（仅列举部分）：</h4>
+
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>域名</th>
+<th>描述</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>int</td>
+<td>s_type</td>
+<td>文件系统类型</td>
+</tr>
+
+<tr>
+<td>unsigned long</td>
+<td>s_blocksize</td>
+<td>块大小（block size）</td>
+</tr>
+
+<tr>
+<td>struct dentry *</td>
+<td>s_root</td>
+<td>指向文件系统根目录对应的dentry</td>
+</tr>
+
+<tr>
+<td>struct list_head</td>
+<td>s_inodes</td>
+<td>文件系统中所有文件的inode（使用list_head双向链表存储）</td>
+</tr>
+
+<tr>
+<td>void *</td>
+<td>s_fs_info</td>
+<td>指向具体文件系统实现（如ext2）的特有的数据结构</td>
+</tr>
+
+<tr>
+<td>struct superblock*</td>
+<td>s_op</td>
+<td>superblock的操作函数（结构体里都是函数指针）</td>
+</tr>
+</tbody>
+</table>
+
+<h4 id="superblock-operations-存储在s-op中-仅列举部分">superblock operations（存储在s_op中，仅列举部分）：</h4>
+
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>功能</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>alloc_inode(sb)</td>
+<td>为一个inode对象分配空间</td>
+</tr>
+
+<tr>
+<td>destroy_inode(inode)</td>
+<td>销毁一个inode对象</td>
+</tr>
+
+<tr>
+<td>read_inode(inode)</td>
+<td>从磁盘中读取inode数据，填充作为传入参数的inode对象</td>
+</tr>
+
+<tr>
+<td>write_inode(inode, flag)</td>
+<td>使用内存中的inode信息更新磁盘中的inode信息</td>
+</tr>
+
+<tr>
+<td>delete_inode(inode)</td>
+<td>删除内存中的inode对象同时删除磁盘上的inode</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="inode数据结构">inode数据结构</h3>
+
+<p>inode数据结构中保存了文件系统处理文件所需要的全部信息以及可以对其执行的操作。一个inode对应磁盘上一个实际的文件（目录是一种特殊的文件）</p>
+
+<p>inode中没有直接存储文件的每个块的位置，根据ext2的的Data Blocks Addressing，下表中的i_blocks和i_bytes应该是共同规定了文件的file block number（从0开始计数）和文件结束位置。下层的文件系统（如ext2）负责将file block number转换为logical block numbe（在磁盘上的block地址）</p>
+
+<h4 id="包含的域-仅列举部分-1">包含的域（仅列举部分）：</h4>
+
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>域名</th>
+<th>描述</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>struct super_block *</td>
+<td>i_sb</td>
+<td>指向inode所在的superblock对象</td>
+</tr>
+
+<tr>
+<td>struct list_head</td>
+<td>i_dentry</td>
+<td>这是一个双向链表的头节点，链表中保存的是指向该inode的dentry对象</td>
+</tr>
+
+<tr>
+<td>unsigned long</td>
+<td>i_ino</td>
+<td>inode编号</td>
+</tr>
+
+<tr>
+<td>umode_t</td>
+<td>i_mode</td>
+<td>文件类型和访问权限域</td>
+</tr>
+
+<tr>
+<td>unsigned int</td>
+<td>i_nlink</td>
+<td>指向该inode的硬链接数量，为0时意味着该inode要销毁了</td>
+</tr>
+
+<tr>
+<td>uid_t</td>
+<td>i_uid</td>
+<td>inode所有者的id</td>
+</tr>
+
+<tr>
+<td>struct timespec</td>
+<td>i_atime</td>
+<td>上次访问的时间戳</td>
+</tr>
+
+<tr>
+<td>unsigned long</td>
+<td>i_blocks</td>
+<td>文件的块数目</td>
+</tr>
+
+<tr>
+<td>unsigned short</td>
+<td>i_bytes</td>
+<td>文件最后一个块的字节大小</td>
+</tr>
+
+<tr>
+<td>struct inode_operations *</td>
+<td>i_op</td>
+<td>inode operations,inode的操作函数</td>
+</tr>
+</tbody>
+</table>
+
+<h4 id="inode-operations-存储在i-op中-仅列举部分">inode operations(存储在i_op中，仅列举部分)</h4>
+
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>功能</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>create(dir, dentry, mode, nameidata)</td>
+<td>创建一个inode</td>
+</tr>
+
+<tr>
+<td>lookup(dir, dentry, nameidata)</td>
+<td>在一个目录文件中查找和dentry包含的文件名匹配的inode</td>
+</tr>
+
+<tr>
+<td>link(old_dentry, dir, new_dentry)</td>
+<td>创建一个指向new_dentry的硬链接，保存在old_dentry中，该old_dentry和new_dentry指向同一个inode，即同一个文件。</td>
+</tr>
+
+<tr>
+<td>symlink(dir, dentry, symname)</td>
+<td>创建一个新的inode，该inode是一个软连接文件，指向参数dentry</td>
+</tr>
+
+<tr>
+<td>mkdir(dir, dentry, mode)</td>
+<td>为dentry创建一个目录文件的inode</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="dentry数据结构">dentry数据结构</h3>
+
+<p>dentry数据结构用于将inode（表示文件）和目录项（表示文件路径）关联起来。inode中是没有文件路径的，所以需要dentry来将文件路径和文件关联起来。dentry在磁盘中没有对应的镜像，所以不需要考虑该dentry是否需要更新。</p>
+
+<p>内核在进行路径查找的时候会为每一级都建立一个dentry，比如/home/damon/cppfile/test.cpp。就需要建立5个dentry（第一个是根目录/，第二个是home,第5个是test.cpp）。</p>
+
+<p>dentry cache将已经查找过的路径缓存在内存中，这样下次查找的时候就不需要重新读取每一级的目录文件进行查找，可以直接通过dentry cache获得对应的inode</p>
+
+<h4 id="包含的域-仅列举部分-2">包含的域（仅列举部分）</h4>
+
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>域名</th>
+<th>描述</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>atomic_t</td>
+<td>d_count</td>
+<td>dentry对象的使用计数器</td>
+</tr>
+
+<tr>
+<td>struct inode *</td>
+<td>d_inode</td>
+<td>dentry指向的inode</td>
+</tr>
+
+<tr>
+<td>struct dentry *</td>
+<td>d_parent</td>
+<td>指向上级目录的dentry</td>
+</tr>
+
+<tr>
+<td>struct qstr</td>
+<td>d_name</td>
+<td>文件名</td>
+</tr>
+
+<tr>
+<td>struct list_head</td>
+<td>d_subdirs</td>
+<td>如果当前dentry是目录的dentry，那么双向链表保存的是所有子目录的dentry</td>
+</tr>
+
+<tr>
+<td>struct super_block *</td>
+<td>d_sb</td>
+<td>dentry对应的super block</td>
+</tr>
+
+<tr>
+<td>struct dentry_operations*</td>
+<td>d_op</td>
+<td>Dentry methods，dentry的操作函数</td>
+</tr>
+</tbody>
+</table>
+
+<h4 id="dentry-operations-存储在d-op中-仅列举部分">dentry operations(存储在d_op中，仅列举部分)</h4>
+
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>功能</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>d_revalidate(dentry, nameidata)</td>
+<td>判断当前dentry对象是仍然有效，应该是dentry cache中使用的</td>
+</tr>
+
+<tr>
+<td>d_hash(dentry, name)</td>
+<td>计算哈希值，应该也是dentry cache中使用的</td>
+</tr>
+
+<tr>
+<td>d_delete(dentry)</td>
+<td>在d_count为0时，删除dentry，默认的VFS函数什么都不做</td>
+</tr>
+</tbody>
+</table>
+
+<h2 id="file数据结构">file数据结构</h2>
+
+<p>file数据结构用于存储进程和打开的文件之间交互的信息，这个信息只会存在于内核空间中，在磁盘上没有对应的信息。</p>
+
+<h4 id="包含的域-仅列举部分-3">包含的域（仅列举部分）</h4>
+
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>域名</th>
+<th>描述</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>struct dentry *</td>
+<td>f_dentry</td>
+<td>和该file对应的dentry</td>
+</tr>
+
+<tr>
+<td>struct vfsmount *</td>
+<td>f_vfsmnt</td>
+<td>file所在的文件系统（文件系统挂载的数据结构）</td>
+</tr>
+
+<tr>
+<td>unsigned int</td>
+<td>f_flags</td>
+<td>打开文件时使用的flag</td>
+</tr>
+
+<tr>
+<td>mode_t</td>
+<td>f_mode</td>
+<td>进程access mode</td>
+</tr>
+
+<tr>
+<td>struct file_operations *</td>
+<td>f_op</td>
+<td>file operations，文件操作函数</td>
+</tr>
+</tbody>
+</table>
+
+<h4 id="dentry-operations-存储在d-op中-仅列举部分-1">dentry operations(存储在d_op中，仅列举部分)</h4>
+
+<table>
+<thead>
+<tr>
+<th>函数</th>
+<th>功能</th>
+</tr>
+</thead>
+
+<tbody>
+<tr>
+<td>open(inode, file)</td>
+<td>打开文件</td>
+</tr>
+
+<tr>
+<td>llseek(file, offset, origin)</td>
+<td>移动文件指针</td>
+</tr>
+
+<tr>
+<td>read(file, buf, count, offset)</td>
+<td>读文件</td>
+</tr>
+
+<tr>
+<td>write(file, buf, count, offset)</td>
+<td>写文件</td>
+</tr>
+</tbody>
+</table>
+
+<h2 id="参考资料">参考资料</h2>
+
+<p>《Understanding the Linux Kernel 3rd Edition》</p>
+
+<p><a href="https://unix.stackexchange.com/questions/4402/what-is-a-superblock-inode-dentry-and-a-file">What is a Superblock, Inode, Dentry and a File?</a></p>
+
+<p><a href="https://www.ibm.com/developerworks/cn/linux/l-cn-vfs/">从文件 I/O 看 Linux 的虚拟文件系统</a></p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/bff01fecc6e590d3ff7101c34f4b3c8889272751/">https://www.huliujia.com/blog/bff01fecc6e590d3ff7101c34f4b3c8889272751/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/f70756be368904eb2e2c463671d67fd5d0dd0b72/">Linux进程状态码总结</a></li>
+        
+        <li><a href="/blog/8a209e5005fd17ec570ced231e48fa4165fde3b7/">《C和C&#43;&#43;程序员面试秘笈》中存在的错误</a></li>
+        
+        <li><a href="/blog/dab47d7b495f721c94db0959b69585abd0016a49/">最小生成树(MST)：Prim算法与Kruskal算法</a></li>
+        
+        <li><a href="/blog/e06651c8dbbb668c7476bd922f78127a72f7eec3/">二叉树的遍历（先序遍历，中序遍历，后序遍历，层次遍历）</a></li>
+        
+        <li><a href="/blog/4c5cd4dd260a03535d12579195dfaf17e57c3b43/">Trie，单词查找树</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/linux">Linux</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F">文件系统</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

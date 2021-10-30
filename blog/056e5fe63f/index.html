@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+
+    <meta charset="utf-8">
+    <meta name="generator" content="Hugo 0.54.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>LevelDB源码解析(15) 写操作之MakeRoomForWrite | 胡刘郏的技术博客</title>
+    <meta property="og:title" content="LevelDB源码解析(15) 写操作之MakeRoomForWrite - 胡刘郏的技术博客">
+    <meta property="og:type" content="article">
+        
+    <meta property="article:published_time" content="2021-10-30T14:28:02&#43;08:00">
+        
+        
+    <meta property="article:modified_time" content="2021-10-30T14:28:02&#43;08:00">
+        
+    <meta name="Keywords" content="linux,C&#43;&#43;,C,后台开发,操作系统,数据结构,算法,计算机网络">
+    <meta name="description" content="LevelDB源码解析(15) 写操作之MakeRoomForWrite">
+        
+    <meta name="author" content="胡刘郏">
+    <meta property="og:url" content="https://www.huliujia.com/blog/056e5fe63f/">
+    <link rel="shortcut icon" href="/favicon-bug.ico" type="image/x-icon">
+
+    <link rel="stylesheet" href="/css/normalize.css">
+    
+        <link rel="stylesheet" href="/css/prism.css">
+    
+    <link rel="stylesheet" href="/css/style.css">
+    <script type="text/javascript" src="//cdn.bootcss.com/jquery/3.2.1/jquery.min.js"></script>
+
+    
+
+
+    
+    
+</head>
+
+<body>
+<header id="header" class="clearfix">
+    <div class="container">
+        <div class="col-group">
+            <div class="site-name ">
+                
+                    <a id="logo" href="https://www.huliujia.com/">
+                        胡刘郏的技术博客
+                    </a>
+                
+                <p class="description">Stay hungry. Stay foolish.</p>
+            </div>
+            <div>
+                <nav id="nav-menu" class="clearfix">
+                    <a class="" href="https://www.huliujia.com/">首页</a>
+                    
+                    <a  href="https://www.huliujia.com/about/" title="关于博主">关于博主</a>
+                    
+                </nav>
+            </div>
+        </div>
+    </div>
+</header>
+
+
+<div id="body">
+    <div class="container">
+        <div class="col-group">
+
+            <div class="col-8" id="main">
+                <div class="res-cons">
+                    <article class="post">
+                        <header>
+                            <h1 class="post-title">LevelDB源码解析(15) 写操作之MakeRoomForWrite</h1>
+                        </header>
+                        <date class="post-meta meta-date">
+                            2021年10月30日
+                        </date>
+                        
+                        <div class="post-meta">
+                            <span>|</span>
+                            
+                                <span class="meta-category"><a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90">源码解析</a></span>
+                            
+                        </div>
+                        
+                        
+                        
+                        <div class="post-content">
+                            
+
+<h2 id="背景">背景</h2>
+
+<p>LevelDB每次写入key-value都是写入到内存中的Memtable中的，但是Memtable的空间不是无限的，Memtable写满后，就需要调用<strong>MakeRoomForWrite</strong>把Memtable转存为Immutable Memtable，并创建新的Memtable来存储写入数据。必要时还会调度后台线程把Immutable Memtable落盘，以及合并SST文件。</p>
+
+<h3 id="makeroomforwrite">MakeRoomForWrite</h3>
+
+<pre><code class="language-C++">Status DBImpl::MakeRoomForWrite(bool force)
+{
+  mutex_.AssertHeld();
+
+  assert(!writers_.empty());
+  bool allow_delay = !force;
+  Status s;
+  while ( true )
+  {
+    //Step0
+    if ( !bg_error_.ok())
+    {
+      //Step1
+      s = bg_error_;
+      break;
+    } else if ( allow_delay &amp;&amp; versions_-&gt;NumLevelFiles(0) &gt;= config::kL0_SlowdownWritesTrigger )
+    {
+      //Step2
+      mutex_.Unlock();
+      env_-&gt;SleepForMicroseconds(1000);
+      allow_delay = false;  // Do not delay a single write more than once
+      mutex_.Lock();
+    } else if ( !force &amp;&amp; (mem_-&gt;ApproximateMemoryUsage() &lt;= options_.write_buffer_size))
+    {
+      //Step3
+      // There is room in current memtable
+      break;
+    } else if ( imm_ != nullptr )
+    {
+      //Step4
+      Log(options_.info_log, &quot;Current memtable full; waiting...\n&quot;);
+      background_work_finished_signal_.Wait();
+    } else if ( versions_-&gt;NumLevelFiles(0) &gt;= config::kL0_StopWritesTrigger )
+    {
+      //Step5
+      Log(options_.info_log, &quot;Too many L0 files; waiting...\n&quot;);
+      background_work_finished_signal_.Wait();
+    } else
+    {
+      //Step6
+      assert(versions_-&gt;PrevLogNumber() == 0);
+
+      uint64_t new_log_number = versions_-&gt;NewFileNumber();
+
+      WritableFile *lfile = nullptr;
+      s = env_-&gt;NewWritableFile(LogFileName(dbname_, new_log_number), &amp;lfile);
+      if ( !s.ok())
+      {
+        versions_-&gt;ReuseFileNumber(new_log_number);
+        break;
+      }
+
+      delete log_; //log::Writer* log_;
+      delete logfile_; //WritableFile
+      logfile_ = lfile;
+      logfile_number_ = new_log_number;
+      log_ = new log::Writer(lfile);
+      imm_ = mem_;
+      has_imm_.store(true, std::memory_order_release);
+      mem_ = new MemTable(internal_comparator_);
+      mem_-&gt;Ref();
+      force = false;  // Do not force another compaction if have room
+      MaybeScheduleCompaction();
+    }
+  }
+  return s;
+}
+</code></pre>
+
+<p>force表示是否强制把Memtable转存为Immutable Memtable。allow_delay的初始值和force相反，表示是否允许delay。如果force为true，allow_delay就是false。在Writer主流程中调用MakeRoomForWrite时，force一定为false。MakeRoomForWrite的主要逻辑都在while循环中，为了方便表述，我们把循环内部的起始位置定为Step0。</p>
+
+<ul>
+<li><strong>Step1</strong>：检查后台线程是否发生错误，如果发生错误，直接返回错误Status。</li>
+<li><strong>Step2</strong>：如果允许delay，且L0层文件数量超过慢写阈值（默认为8），就等待1ms，然后把allow_delay置为false，回到Step0。allow_delay在下次执行时就是false了，所以慢写最多执行一次，避免Write主流程被阻塞太久。</li>
+<li><strong>Step3</strong>：如果Memtable未写满（空间占用没有超过阈值），说明当前Memtable是有空间写入的。如果force为false，即不强制转存Memtable，那么结束循环，继续使用当前的Memtable。</li>
+<li><strong>Step4</strong>：能走到这一步，要么force为true，要么当前Memtable已经写满了。都需要把Memtable转为Immutable Memtable。所以检查imm_是否为null，不为null的话，就要等待后台程序先把当前Immutable Memtable落盘(落盘后imm_会被置为null）。所以要在条件变量background_work_finished_signal_上Wait。被条件变量唤醒后将回到Step0重新执行。重新执行后会再来到Step4，如果imm_为空了，就进入Step5进行判断，如果imm_不为空，那么继续Wait。</li>
+<li><strong>Step5</strong>：能走到这里说明需要转存Memtable，并且Immutable Memtable已经落盘了(imm_为null）。判断L0层文件数量是否超过停写阈值（默认为12），如果超过了，就停止写入，并在background_work_finished_signal_上Wait，被唤醒后回到Step0。因为读操作需要检查L0层的所有文件，所以L0层文件数量过多会降低读的速度。Step2和Step5的目的都是为了避免L0层的文件数量过多，所以要减慢或者停止写入，给后台程序足够的时间去完成文件合并，不然L0层文件数量就会无限膨胀。</li>
+<li><strong>Step6</strong>：走到这一步，说明需要转存Memtable，且imm_为null。那么就把Memtable转存为Immutable Memtable，然后创建一个新的Memtable。每个Memtable都有一个WAL日志文件，所以会为这个新的Memtable创建新的WAL日志文件。MaybeScheduleCompaction尝试调度后台线程。imm_落盘和SST文件合并都是由后台线程完成的。</li>
+</ul>
+
+<h2 id="maybeschedulecompaction">MaybeScheduleCompaction</h2>
+
+<pre><code class="language-C++">void DBImpl::MaybeScheduleCompaction()
+{
+  mutex_.AssertHeld();
+  if( background_compaction_scheduled_ )
+  {
+    // Already scheduled
+  }else if( shutting_down_.load(std::memory_order_acquire))
+  {
+    // DB is being deleted; no more background compactions
+  }else if( !bg_error_.ok())
+  {
+    // Already got an error; no more changes
+  }else if( imm_ == nullptr &amp;&amp; manual_compaction_ == nullptr &amp;&amp; !versions_-&gt;NeedsCompaction())
+  {
+    // No work to be done
+  }else
+  {
+    background_compaction_scheduled_ = true;
+    env_-&gt;Schedule(&amp;DBImpl::BGWork, this);
+  }
+}
+</code></pre>
+
+<p>先检查线程是否已经被调度了，如果已经被调度了，就直接退出。如果DB已经被关闭，那么就不调度了。如果后台线程出错，也不调度。</p>
+
+<p>前面几个都是常规检查，第三个判断是关键逻辑。只有三个子条件都会true，才会直接返回，只要任意一个子条件为false，就会走到else语句调度后台线程。即：</p>
+
+<ul>
+<li>如果imm_不为空，调度</li>
+<li>如果设置了手动合并，调度</li>
+<li>如果版本系统认为需要合并，调度。</li>
+</ul>
+
+<pre><code class="language-C++">void DBImpl::BGWork(void* db)
+{
+  reinterpret_cast&lt;DBImpl*&gt;(db)-&gt;BackgroundCall();
+}
+</code></pre>
+
+<p>任务队列池存储的是BGWork函数指针，参数是DBImpl对象。执行任务也就是执行BGWork，而BGWork实际执行的是BackgroundCall。</p>
+
+<h2 id="backgroundcall">BackgroundCall</h2>
+
+<pre><code class="language-C++">void DBImpl::BackgroundCall()
+{
+  MutexLock l(&amp;mutex_);
+  assert(background_compaction_scheduled_);
+  if( shutting_down_.load(std::memory_order_acquire))
+  {
+    // No more background work when shutting down.
+  }else if( !bg_error_.ok())
+  {
+    // No more background work after a background error.
+  }else
+  {
+    BackgroundCompaction();
+  }
+
+  background_compaction_scheduled_ = false;
+
+  // Previous compaction may have produced too many files in a level,
+  // so reschedule another compaction if needed.
+  MaybeScheduleCompaction();
+  background_work_finished_signal_.SignalAll();
+}
+</code></pre>
+
+<p>BackgroundCall先判断DB是否被关闭，后台线程有无错误，如果没有问题，就调用BackgroundCompaction完成后台合并（详见<a href="https://www.huliujia.com/blog/4496bd928e/">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>），完成BackgroundCompaction后把background_compaction_scheduled_置为false，允许其他线程发起新的调度。然后再调用MaybeScheduleCompaction检查是否需要再次调度。最后唤醒等待条件变量的线程。比如在MakeRoomForWrite中Wait的线程。</p>
+
+<p>后台线程是不存在并发的，同一时刻只会有一个后台线程在执行。后台线程和Write线程存在并发竞争，所以在关键区域要使用成员变量mutex_加锁。</p>
+
+                        </div>
+
+                        
+<div class="post-archive">
+    <ul class="post-copyright">
+        <li><strong>原文作者：</strong><a rel="author" href="https://www.huliujia.com/">胡刘郏</a></li>
+        <li style="word-break:break-all"><strong>原文链接：</strong><a href="https://www.huliujia.com/blog/056e5fe63f/">https://www.huliujia.com/blog/056e5fe63f/</a></li>
+        
+    </ul>
+</div>
+<br/>
+
+
+
+                        
+
+<div class="post-archive">
+    <h2>See Also</h2>
+    <ul class="listing">
+        
+        <li><a href="/blog/24af576aa3/">LevelDB源码解析(14) 写操作之Write主流程</a></li>
+        
+        <li><a href="/blog/124132a9b3/">LevelDB源码解析(12) Memtable落盘</a></li>
+        
+        <li><a href="/blog/4496bd928e/">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a></li>
+        
+        <li><a href="/blog/6974db6de9/">LevelDB源码解析(11) SST文件结构</a></li>
+        
+        <li><a href="/blog/02ad8ac30a/">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a></li>
+        
+    </ul>
+</div>
+
+
+                        <div class="post-meta meta-tags">
+                            
+                            <ul class="clearfix">
+                                
+                                <li><a href="https://www.huliujia.com/tags/leveldb">LevelDB</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/write">Write</a></li>
+                                
+                                <li><a href="https://www.huliujia.com/tags/memtable">Memtable</a></li>
+                                
+                            </ul>
+                            
+                        </div>
+                    </article>
+                    
+    
+
+    
+    
+    <div class="post bg-white">
+      <script src="https://utteranc.es/client.js"
+            repo= "skydamon/skydamon.github.io"
+            issue-term="pathname"
+            theme="github-light"
+            label="BlogComments"
+            crossorigin="anonymous"
+            async>
+      </script>
+    </div>
+    
+                </div>
+            </div>
+            <div id="secondary">
+    <section class="widget">
+        <form id="search" action="//www.google.com/search" method="get" accept-charset="utf-8" target="_blank" _lpchecked="1">
+      
+      <input type="text" name="q" maxlength="20" placeholder="Search">
+      <input type="hidden" name="sitesearch" value="https://www.huliujia.com/">
+      <button type="submit" class="submit icon-search"></button>
+</form>
+    </section>
+    
+    <section class="widget">
+        <h3 class="widget-title">订阅</h3>
+        <ul class="widget-list">
+            <li><a href="https://www.huliujia.com/index.xml">RSS</a></li>
+        </ul>
+    </section>
+
+    
+
+    <section class="widget">
+        <h3 class="widget-title">分类</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/c/c&#43;&#43;/">C/C&#43;&#43;(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/linux/">Linux(15)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E4%BA%BA%E5%B7%A5%E6%99%BA%E8%83%BD/">人工智能(2)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E5%B7%A5%E5%85%B7%E4%BD%BF%E7%94%A8/">工具使用(5)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/">教程(6)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">数据结构(1)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/">数据结构与算法(7)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%9C%AA%E5%88%86%E7%B1%BB/">未分类(3)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/categories/%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/">源码解析(15)</a>
+    </li>
+    
+</ul>
+    </section>
+
+    
+    <section class="widget">
+        <h3 class="widget-title">最近文章</h3>
+<ul class="widget-list">
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/056e5fe63f/" title="LevelDB源码解析(15) 写操作之MakeRoomForWrite">LevelDB源码解析(15) 写操作之MakeRoomForWrite</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/24af576aa3/" title="LevelDB源码解析(14) 写操作之Write主流程">LevelDB源码解析(14) 写操作之Write主流程</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/4496bd928e/" title="LevelDB源码解析(13) BackgroundCompaction SST文件合并">LevelDB源码解析(13) BackgroundCompaction SST文件合并</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/124132a9b3/" title="LevelDB源码解析(12) Memtable落盘">LevelDB源码解析(12) Memtable落盘</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6974db6de9/" title="LevelDB源码解析(11) SST文件结构">LevelDB源码解析(11) SST文件结构</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/02ad8ac30a/" title="LevelDB源码解析(10) TableBuilder（Memtable序列化）">LevelDB源码解析(10) TableBuilder（Memtable序列化）</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/1a8dbd0991/" title="LevelDB源码解析(9) FilterBlockBuilder">LevelDB源码解析(9) FilterBlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/6a7ee0401f/" title="LevelDB源码解析(8) BlockBuilder">LevelDB源码解析(8) BlockBuilder</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/e8d980b551/" title="LevelDB源码解析(7) 预写日志(WAL)">LevelDB源码解析(7) 预写日志(WAL)</a>
+    </li>
+    
+    <li>
+        <a href="https://www.huliujia.com/blog/cc155a0319/" title="LevelDB源码解析(6) 写任务(WriterBatch)合并">LevelDB源码解析(6) 写任务(WriterBatch)合并</a>
+    </li>
+    
+</ul>
+
+    </section>
+    
+
+    <section class="widget">
+        <h3 class="widget-title">标签</h3>
+<div class="tagcloud">
+    
+    <a href="https://www.huliujia.com/tags/arena/">Arena</a>
+    
+    <a href="https://www.huliujia.com/tags/beautifulsoup/">BeautifulSoup</a>
+    
+    <a href="https://www.huliujia.com/tags/bison/">Bison</a>
+    
+    <a href="https://www.huliujia.com/tags/block-io/">Block IO</a>
+    
+    <a href="https://www.huliujia.com/tags/blockbuilder/">BlockBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/c&#43;&#43;/">C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/c/c&#43;&#43;/">C/C&#43;&#43;</a>
+    
+    <a href="https://www.huliujia.com/tags/cheet-sheet/">Cheet Sheet</a>
+    
+    <a href="https://www.huliujia.com/tags/docker/">Docker</a>
+    
+    <a href="https://www.huliujia.com/tags/filterblock/">FilterBlock</a>
+    
+    <a href="https://www.huliujia.com/tags/flex/">Flex</a>
+    
+    <a href="https://www.huliujia.com/tags/git/">Git</a>
+    
+    <a href="https://www.huliujia.com/tags/github-pages/">Github Pages</a>
+    
+    <a href="https://www.huliujia.com/tags/hugo/">Hugo</a>
+    
+    <a href="https://www.huliujia.com/tags/leveldb/">LevelDB</a>
+    
+    <a href="https://www.huliujia.com/tags/linux/">Linux</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">MemTable</a>
+    
+    <a href="https://www.huliujia.com/tags/memtable/">Memtable</a>
+    
+    <a href="https://www.huliujia.com/tags/nginx/">Nginx</a>
+    
+    <a href="https://www.huliujia.com/tags/page-cache/">Page Cache</a>
+    
+    <a href="https://www.huliujia.com/tags/put/">Put</a>
+    
+    <a href="https://www.huliujia.com/tags/sst/">SST</a>
+    
+    <a href="https://www.huliujia.com/tags/svn/">Svn</a>
+    
+    <a href="https://www.huliujia.com/tags/tablebuilder/">TableBuilder</a>
+    
+    <a href="https://www.huliujia.com/tags/vscode/">VSCode</a>
+    
+    <a href="https://www.huliujia.com/tags/wal/">WAL</a>
+    
+    <a href="https://www.huliujia.com/tags/write/">Write</a>
+    
+    <a href="https://www.huliujia.com/tags/writebatch/">WriteBatch</a>
+    
+    <a href="https://www.huliujia.com/tags/xpath/">XPath</a>
+    
+    <a href="https://www.huliujia.com/tags/m/">^M</a>
+    
+    <a href="https://www.huliujia.com/tags/assert/">assert</a>
+    
+    <a href="https://www.huliujia.com/tags/atomic/">atomic</a>
+    
+    <a href="https://www.huliujia.com/tags/crontab/">crontab</a>
+    
+    <a href="https://www.huliujia.com/tags/etree/">etree</a>
+    
+    <a href="https://www.huliujia.com/tags/html/">html</a>
+    
+    <a href="https://www.huliujia.com/tags/iconv/">iconv</a>
+    
+    <a href="https://www.huliujia.com/tags/inline/">inline</a>
+    
+    <a href="https://www.huliujia.com/tags/lxml/">lxml</a>
+    
+    <a href="https://www.huliujia.com/tags/coding-pages/">“Coding Pages&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/subversion/">”Subversion&#34;</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%87/">中文</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B8%AD%E6%96%AD%E5%A4%84%E7%90%86/">中断处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%B9%B1%E7%A0%81/">乱码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%8C%E5%8F%89%E6%A0%91/">二叉树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BA%91%E6%9C%8D%E5%8A%A1%E5%99%A8/">云服务器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E4%BF%A1%E6%81%AF%E7%86%B5/">信息熵</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98/">内存</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86/">内存管理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%85%E5%AD%98%E9%A1%BA%E5%BA%8F/">内存顺序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%86%B3%E7%AD%96%E6%A0%91/">决策树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8D%8F%E5%90%8C%E8%BF%87%E6%BB%A4/">协同过滤</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C/">原子操作</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9B%BE/">图</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">地址空间</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%A4%84%E7%90%86/">大数据处理</a>
+    
+    <a href="https://www.huliujia.com/tags/%E5%AE%9A%E6%97%B6%E4%BB%BB%E5%8A%A1/">定时任务</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8D%A2%E8%A1%8C%E7%AC%A6/">换行符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%8E%92%E5%BA%8F/">排序</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/">文件系统</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E5%B0%8F%E7%94%9F%E6%88%90%E6%A0%91/">最小生成树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%9C%80%E7%9F%AD%E8%B7%AF%E5%BE%84/">最短路径</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%A0%91/">树</a>
+    
+    <a href="https://www.huliujia.com/tags/%E6%AD%A3%E5%88%99%E8%A1%A8%E8%BE%BE%E5%BC%8F/">正则表达式</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%88%AC%E8%99%AB/">爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%89%88%E6%9C%AC%E6%8E%A7%E5%88%B6/">版本控制</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%99%BE%E5%BA%A6/">百度</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%9B%B8%E5%85%B3%E7%B3%BB%E6%95%B0/">相关系数</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8/">系统调用</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E7%A0%81/">编码</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BC%96%E8%AF%91%E5%99%A8/">编译器</a>
+    
+    <a href="https://www.huliujia.com/tags/%E7%BD%91%E9%A1%B5%E7%88%AC%E8%99%AB/">网页爬虫</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%99%9A%E6%8B%9F%E6%9C%BA/">虚拟机</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%8D%E6%B3%95%E5%88%86%E6%9E%90/">词法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%AF%AD%E6%B3%95%E5%88%86%E6%9E%90/">语法分析</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%B7%B3%E8%B7%83%E8%A1%A8/">跳跃表</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AC%E4%B9%89%E5%AD%97%E7%AC%A6/">转义字符</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BD%AF%E4%B8%AD%E6%96%AD/">软中断</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B/">进程</a>
+    
+    <a href="https://www.huliujia.com/tags/%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81/">进程状态</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%94%81/">锁</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E5%8D%9A%E5%AE%A2/">静态博客</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%9D%99%E6%80%81%E7%BD%91%E7%AB%99/">静态网站</a>
+    
+    <a href="https://www.huliujia.com/tags/%E9%A2%84%E5%86%99%E6%97%A5%E5%BF%97/">预写日志</a>
+    
+</div>
+    </section>
+
+    
+
+    </div>
+
+        </div>
+    </div>
+</div>
+<footer id="footer">
+    <div class="container">
+        &copy; 2021 <a href="https://www.huliujia.com/">胡刘郏的技术博客</a>.
+        Powered by <a rel="nofollow noreferer noopener" href="https://gohugo.io" target="_blank">Hugo</a>.
+        <a href="https://www.flysnow.org/" target="_blank">Theme</a> based on <a href="https://github.com/skydamon/maupassant-hugo" target="_blank">maupassant</a>.
+        
+    </div>
+</footer>
+
+
+    <script type="text/javascript">
+    
+    (function(){
+        $("pre code").parent().addClass("line-numbers")
+    }())
+
+    window.MathJax = {
+        tex2jax: {
+            inlineMath: [ ['$','$'] ],
+            processEscapes: true
+        }
+    };
+    </script>
+    <script type="text/javascript" src="/js/prism.js" async="true"></script>
+    <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
+
+<a id="rocket" href="#top"></a>
+<script type="text/javascript" src="/js/totop.js?v=0.0.0" async=""></script>
+
+
+
+<script type="text/javascript" src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js" async></script>
+
+
+
+
+
+</body>
+</html>

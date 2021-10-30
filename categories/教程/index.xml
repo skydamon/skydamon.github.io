@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>教程 on 胡刘郏的技术博客</title>
+    <link>https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/</link>
+    <description>Recent content in 教程 on 胡刘郏的技术博客</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Thu, 17 Sep 2020 09:20:27 +0800</lastBuildDate>
+    
+	<atom:link href="https://www.huliujia.com/categories/%E6%95%99%E7%A8%8B/index.xml" rel="self" type="application/rss+xml" />
+    
+    
+    <item>
+      <title>简易编译器实现（二）使用Bison创建语法分析器</title>
+      <link>https://www.huliujia.com/blog/e50b11b118cb08067469fa9c8af90aad3aa2f02e/</link>
+      <pubDate>Thu, 17 Sep 2020 09:20:27 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/e50b11b118cb08067469fa9c8af90aad3aa2f02e/</guid>
+      <description>简易编译器实现（一）使用Flex创建词法分析器一文介绍了编译器的概念和七个阶段，并说明了如何使用Flex创建词法分析器。本篇文章介绍如何使用Bison创建语法分析器，并实现基本的运算能力。本文继续使用简易编译器实现（一）使用Flex创建词法分析器中提出的集</description>
+    </item>
+    
+    <item>
+      <title>简易编译器实现（一）使用Flex创建词法分析器</title>
+      <link>https://www.huliujia.com/blog/7bdf23e1aadefa13286b73c3aa4063a5836b1a37/</link>
+      <pubDate>Tue, 15 Sep 2020 08:30:03 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7bdf23e1aadefa13286b73c3aa4063a5836b1a37/</guid>
+      <description>编译器简介 编程语言是人和计算机交流的媒介，但是计算机只能理解二进制语言，编译器的工作就是把人可以理解的编程语言翻译成机器可以理解的二进制语言，即可执行文件。 编译过程可以细分为7个阶段 词法分析 语法分析 语义分析 中间代码生成 机器无关的代码优化 代码生成 机器相关的代</description>
+    </item>
+    
+    <item>
+      <title>云服务器&#43;Github Pages双节点托管解决博客访问速度和百度收录问题</title>
+      <link>https://www.huliujia.com/blog/29265e5a1e69e0794a9f1acd59ae94489cf38bb4/</link>
+      <pubDate>Sat, 04 May 2019 22:11:53 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/29265e5a1e69e0794a9f1acd59ae94489cf38bb4/</guid>
+      <description>Github Pages + Hugo 搭建静态博客介绍了如何使用Github Pages托管静态网站。 使用双仓库+多路解析解决Github Pages无法被百度搜索收录的问题介绍了如何使用Coding Pages和Github Pages双仓库托管静态网站。 使用云服务器+Nginx配置静态We</description>
+    </item>
+    
+    <item>
+      <title>使用云服务器&#43;Nginx搭建静态Web服务器</title>
+      <link>https://www.huliujia.com/blog/4ee3f047a0c262c0b9b3566700676c54cdf6a30d/</link>
+      <pubDate>Fri, 03 May 2019 21:44:50 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/4ee3f047a0c262c0b9b3566700676c54cdf6a30d/</guid>
+      <description>这篇文章介绍如何使用Nginx搭建静态Web服务器（比如静态博客），并实现HTTPS访问（可选）以及Github Pages双节点托管（可选）。Nginx是一款轻量级Web服务器，也可以用作反向代理，负载平衡器 和 HTTP缓存。 域名和云服务器准备 本文假定你已经</description>
+    </item>
+    
+    <item>
+      <title>使用双仓库&#43;多路解析解决Github Pages无法被百度搜索收录的问题</title>
+      <link>https://www.huliujia.com/blog/7d8b8a8b346ec437171b8ceca0c4fd708af4b702/</link>
+      <pubDate>Thu, 28 Feb 2019 09:01:59 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7d8b8a8b346ec437171b8ceca0c4fd708af4b702/</guid>
+      <description>背景介绍 在Github Pages + Hugo 搭建静态博客一文中，介绍了如何使用Github pages搭建个人博客。搭建博客后发现Google已经收录了，但是百度却迟迟没有收录，使用百度的“搜索资源平台-抓取诊断”功能对网站进行抓取测试发现抓取失败了，结果为403 Forbi</description>
+    </item>
+    
+    <item>
+      <title>Github Pages &#43; Hugo 搭建静态博客</title>
+      <link>https://www.huliujia.com/blog/7dab9c2ab6132aaa3fe0da2f7f9fe3264bdd8d75/</link>
+      <pubDate>Sat, 23 Feb 2019 16:58:23 +0800</pubDate>
+      
+      <guid>https://www.huliujia.com/blog/7dab9c2ab6132aaa3fe0da2f7f9fe3264bdd8d75/</guid>
+      <description>前景提要 阮一峰总结了喜欢写Blog的人，会经历三个阶段。 第一阶段，刚接触Blog，觉得很新鲜，试着选择一个免费空间来写。 第二阶段，发现免费空间限制太多，就自己购买域名和空间，搭建独立博客。 第三阶段，觉得独立博客的管理太麻烦，最好在保留控制权的前提下，让别人</description>
+    </item>
+    
+  </channel>
+</rss>
